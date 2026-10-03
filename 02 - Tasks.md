@@ -77,33 +77,33 @@ interfaces/
 
 Objetivo: representar dinheiro de forma exata e segura.
 
-- [ ] Criar classe `Money`
-- [ ] Usar constructor privado
-- [ ] Criar `Money.from()`
-- [ ] Criar `Money.zero()`
-- [ ] Implementar `add()`
-- [ ] Implementar `subtract()`
-- [ ] Implementar `negate()`
-- [ ] Implementar `isZero()`
-- [ ] Implementar `isPositive()`
-- [ ] Implementar `isNegative()`
-- [ ] Implementar `isLessThan()`
-- [ ] Implementar `equals()`
-- [ ] Implementar `toJSON()`
-- [ ] Implementar `toString()`
-- [ ] Garantir imutabilidade
-- [ ] Validar moedas iguais em operações
-- [ ] Aceitar amount como string decimal
-- [ ] Garantir escala fixa de 2 casas
-- [ ] Rejeitar string vazia
-- [ ] Rejeitar `NaN`
-- [ ] Rejeitar `Infinity`
-- [ ] Rejeitar notação científica
-- [ ] Rejeitar mais de 2 casas decimais
-- [ ] Rejeitar valores negativos nos contratos de entrada
-- [ ] Nunca utilizar `number`, `float` ou `double` para dinheiro
-- [ ] Criar testes unitários para todas as operações
-- [ ] Criar teste de conflito de moeda
+- [x] Criar classe `Money`
+- [x] Usar constructor privado
+- [x] Criar `Money.from()`
+- [x] Criar `Money.zero()`
+- [x] Implementar `add()`
+- [x] Implementar `subtract()`
+- [x] Implementar `negate()`
+- [x] Implementar `isZero()`
+- [x] Implementar `isPositive()`
+- [x] Implementar `isNegative()`
+- [x] Implementar `isLessThan()`
+- [x] Implementar `equals()`
+- [x] Implementar `toJSON()`
+- [x] Implementar `toString()`
+- [x] Garantir imutabilidade
+- [x] Validar moedas iguais em operações
+- [x] Aceitar amount como string decimal
+- [x] Garantir escala fixa de 2 casas
+- [x] Rejeitar string vazia
+- [x] Rejeitar `NaN`
+- [x] Rejeitar `Infinity`
+- [x] Rejeitar notação científica
+- [x] Rejeitar mais de 2 casas decimais
+- [x] Rejeitar valores negativos nos contratos de entrada
+- [x] Nunca utilizar `number`, `float` ou `double` para dinheiro
+- [x] Criar testes unitários para todas as operações
+- [x] Criar teste de conflito de moeda
 
 Exemplos válidos:
 - `"0.00"`

@@ -119,7 +119,11 @@ A entrada e saída do sistema utilizam strings decimais:
 
 `"25.00"`
 
-Internamente será utilizada uma representação decimal exata.
+Internamente é utilizado `decimal.js`, recebendo valores monetários somente como strings, sem conversão para `number`. Uma configuração isolada com 21 dígitos significativos preserva os cálculos de soma e subtração dentro do limite escolhido, inclusive o dígito adicional necessário para detectar overflow.
+
+O contrato de entrada exige exatamente duas casas decimais e rejeita valores negativos, notação científica, espaços e excesso de casas; não existe arredondamento silencioso. Resultados internos de subtração e negação podem ser negativos, permitindo calcular a diferença de reconciliação. `toString()` retorna apenas o valor decimal; `toJSON()` retorna `{ amount, currency }`.
+
+O limite de magnitude é `999999999999999999.99`, compatível com o futuro mapeamento PostgreSQL `NUMERIC(20,2)`. Entradas e resultados que excedem esse limite são rejeitados. As migrations deverão preservar essa decisão; ainda não há persistência implementada. Códigos de moeda são validados pela lista ISO-4217 disponibilizada por `Intl.supportedValuesOf('currency')` no runtime Bun; BRL, USD e EUR são cobertos por testes, sempre com escala de duas casas conforme o contrato simplificado deste desafio.
 
 Money é imutável.
 
