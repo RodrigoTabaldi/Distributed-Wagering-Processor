@@ -5,21 +5,21 @@
 - [ ] Confirmar Bun 1.x
 - [ ] Configurar NestJS
 - [ ] Confirmar TypeScript com `strict: true`
-- [ ] Instalar e configurar PostgreSQL
-- [ ] Instalar e configurar MikroORM
-- [ ] Instalar biblioteca decimal para valores monetários
+- [x] Instalar e configurar PostgreSQL
+- [x] Instalar e configurar MikroORM
+- [x] Instalar biblioteca decimal para valores monetários
 - [ ] Instalar AWS SDK necessário para SQS
 - [ ] Configurar LocalStack ou MiniStack
-- [ ] Criar `docker-compose.yml`
-- [ ] Adicionar PostgreSQL ao Docker Compose
+- [x] Criar `docker-compose.yml`
+- [x] Adicionar PostgreSQL ao Docker Compose
 - [ ] Adicionar LocalStack/MiniStack ao Docker Compose
 - [ ] Criar fila `wager-transactions.fifo`
 - [ ] Criar fila `wager-transactions-dlq.fifo`
-- [ ] Configurar variáveis de ambiente
-- [ ] Configurar conexão NestJS → PostgreSQL
-- [ ] Configurar migrations
-- [ ] Confirmar que migrations podem ser aplicadas
-- [ ] Confirmar que migrations podem ser revertidas
+- [x] Configurar variáveis de ambiente
+- [x] Configurar conexão NestJS → PostgreSQL
+- [x] Configurar migrations
+- [x] Confirmar que migrations podem ser aplicadas
+- [x] Confirmar que migrations podem ser revertidas
 - [ ] Confirmar que aplicação, PostgreSQL e SQS sobem corretamente
 
 ---
@@ -138,20 +138,20 @@ Campos principais:
 
 Implementação:
 
-- [ ] Criar classe `Wallet`
-- [ ] Usar constructor privado
-- [ ] Criar `Wallet.open()`
-- [ ] Criar `Wallet.rehydrate()`
-- [ ] Criar getter de balance
-- [ ] Criar getter de version
-- [ ] Criar getter de updatedAt
-- [ ] Implementar `credit()`
-- [ ] Implementar `debit()`
-- [ ] Impedir saldo negativo
-- [ ] Impedir movimentação com moeda diferente
-- [ ] Version iniciar em 1
-- [ ] Incrementar version apenas quando saldo mudar
-- [ ] Criar testes unitários
+- [x] Criar classe `Wallet`
+- [x] Usar constructor privado
+- [x] Criar `Wallet.open()`
+- [x] Criar `Wallet.rehydrate()`
+- [x] Criar getter de balance
+- [x] Criar getter de version
+- [x] Criar getter de updatedAt
+- [x] Implementar `credit()`
+- [x] Implementar `debit()`
+- [x] Impedir saldo negativo
+- [x] Impedir movimentação com moeda diferente
+- [x] Version iniciar em 1
+- [x] Incrementar version apenas quando saldo mudar
+- [x] Criar testes unitários
 
 Testar:
 
@@ -168,27 +168,27 @@ Testar:
 
 Objetivo: registrar de forma imutável todas as movimentações financeiras.
 
-- [ ] Criar enum `LedgerDirection`
-- [ ] Criar `DEBIT`
-- [ ] Criar `CREDIT`
-- [ ] Criar classe `WalletLedgerEntry`
-- [ ] Usar constructor privado
-- [ ] Criar `create()`
-- [ ] Criar `rehydrate()`
-- [ ] Criar `isBalanced()`
-- [ ] Armazenar `walletId`
-- [ ] Armazenar `transactionId`
-- [ ] Armazenar `direction`
-- [ ] Armazenar `money`
-- [ ] Armazenar `balanceBefore`
-- [ ] Armazenar `balanceAfter`
-- [ ] Armazenar `createdAt`
-- [ ] Garantir imutabilidade
-- [ ] Não criar setters
-- [ ] Não permitir alteração após criação
-- [ ] Validar que CREDIT respeita `balanceBefore + money = balanceAfter`
-- [ ] Validar que DEBIT respeita `balanceBefore - money = balanceAfter`
-- [ ] Criar testes
+- [x] Criar enum `LedgerDirection`
+- [x] Criar `DEBIT`
+- [x] Criar `CREDIT`
+- [x] Criar classe `WalletLedgerEntry`
+- [x] Usar constructor privado
+- [x] Criar `create()`
+- [x] Criar `rehydrate()`
+- [x] Criar `isBalanced()`
+- [x] Armazenar `walletId`
+- [x] Armazenar `transactionId`
+- [x] Armazenar `direction`
+- [x] Armazenar `money`
+- [x] Armazenar `balanceBefore`
+- [x] Armazenar `balanceAfter`
+- [x] Armazenar `createdAt`
+- [x] Garantir imutabilidade
+- [x] Não criar setters
+- [x] Não permitir alteração após criação
+- [x] Validar que CREDIT respeita `balanceBefore + money = balanceAfter`
+- [x] Validar que DEBIT respeita `balanceBefore - money = balanceAfter`
+- [x] Criar testes
 
 ---
 
@@ -215,30 +215,30 @@ Status:
 
 Implementação:
 
-- [ ] Criar enum `WagerTransactionKind`
-- [ ] Criar enum `WagerTransactionStatus`
-- [ ] Criar classe `WagerTransaction`
-- [ ] Usar constructor privado
-- [ ] Criar `create()`
-- [ ] Criar `rehydrate()`
-- [ ] Criar `markProcessed()`
-- [ ] Criar `markPendingReference()`
-- [ ] Criar `reject()`
-- [ ] Criar `fail()`
-- [ ] Criar `isTerminal()`
-- [ ] Criar `affectsBalance()`
-- [ ] Criar `requiresReference()`
-- [ ] Criar `matchesPayload()`
-- [ ] Criar `ledgerDirectionFor()`
-- [ ] Garantir que PROCESSED seja terminal
-- [ ] Garantir que REJECTED seja terminal
-- [ ] Garantir que FAILED seja terminal
-- [ ] Impedir transições após estado terminal
-- [ ] Garantir que REFUND exija referência
-- [ ] Garantir que ROLLBACK exija referência
-- [ ] Impedir OPENING via HTTP
-- [ ] Impedir OPENING via SQS
-- [ ] Criar testes
+- [x] Criar enum `WagerTransactionKind`
+- [x] Criar enum `WagerTransactionStatus`
+- [x] Criar classe `WagerTransaction`
+- [x] Usar constructor privado
+- [x] Criar `create()`
+- [x] Criar `rehydrate()`
+- [x] Criar `markProcessed()`
+- [x] Criar `markPendingReference()`
+- [x] Criar `reject()`
+- [x] Criar `fail()`
+- [x] Criar `isTerminal()`
+- [x] Criar `affectsBalance()`
+- [x] Criar `requiresReference()`
+- [x] Criar `matchesPayload()`
+- [x] Criar `ledgerDirectionFor()`
+- [x] Garantir que PROCESSED seja terminal
+- [x] Garantir que REJECTED seja terminal
+- [x] Garantir que FAILED seja terminal
+- [x] Impedir transições após estado terminal
+- [x] Garantir que REFUND exija referência
+- [x] Garantir que ROLLBACK exija referência
+- [ ] Impedir OPENING via HTTP (factory externa já rejeita; falta integração HTTP)
+- [ ] Impedir OPENING via SQS (factory externa já rejeita; falta consumer)
+- [x] Criar testes
 
 ---
 
@@ -248,62 +248,62 @@ Objetivo: garantir as invariantes também no banco.
 
 Criar tabelas:
 
-- [ ] `wallets`
-- [ ] `wager_transactions`
-- [ ] `wallet_ledger_entries`
+- [x] `wallets`
+- [x] `wager_transactions`
+- [x] `wallet_ledger_entries`
 
 Wallet:
 
-- [ ] PK
-- [ ] playerId
-- [ ] currency
-- [ ] balance
-- [ ] version
-- [ ] timestamps
-- [ ] UNIQUE `(playerId, currency)`
-- [ ] CHECK garantindo saldo não negativo
+- [x] PK
+- [x] playerId
+- [x] currency
+- [x] balance
+- [x] version
+- [x] timestamps
+- [x] UNIQUE `(playerId, currency)`
+- [x] CHECK garantindo saldo não negativo
 
 WagerTransaction:
 
-- [ ] PK
-- [ ] providerId
-- [ ] externalTransactionId
-- [ ] idempotencyKey
-- [ ] payloadHash
-- [ ] walletId
-- [ ] playerId
-- [ ] roundId
-- [ ] gameId
-- [ ] kind
-- [ ] amount
-- [ ] currency
-- [ ] status
-- [ ] referenceExternalTransactionId
-- [ ] referenceTransactionId
-- [ ] failureCode
-- [ ] processedAt
-- [ ] timestamps
-- [ ] UNIQUE adequado para idempotencyKey
-- [ ] UNIQUE adequado para provider + externalTransactionId
+- [x] PK
+- [x] providerId
+- [x] externalTransactionId
+- [x] idempotencyKey
+- [x] payloadHash
+- [x] walletId
+- [x] playerId
+- [x] roundId
+- [x] gameId
+- [x] kind
+- [x] amount
+- [x] currency
+- [x] status
+- [x] referenceExternalTransactionId
+- [x] referenceTransactionId
+- [x] failureCode
+- [x] processedAt
+- [x] timestamps
+- [x] UNIQUE adequado para idempotencyKey
+- [x] UNIQUE adequado para provider + externalTransactionId
 
 Ledger:
 
-- [ ] PK
-- [ ] walletId
-- [ ] transactionId
-- [ ] direction
-- [ ] amount
-- [ ] currency
-- [ ] balanceBefore
-- [ ] balanceAfter
-- [ ] createdAt
-- [ ] Garantir no máximo um lançamento por transaction + wallet
+- [x] PK
+- [x] walletId
+- [x] transactionId
+- [x] direction
+- [x] amount
+- [x] currency
+- [x] balanceBefore
+- [x] balanceAfter
+- [x] createdAt
+- [x] Garantir no máximo um lançamento por transaction + wallet
 
 Migrations:
 
-- [ ] Criar migrations versionadas
-- [ ] Garantir rollback
-- [ ] Testar constraints diretamente no PostgreSQL
+- [x] Criar migrations versionadas
+- [x] Garantir rollback
+- [x] Testar constraints diretamente no PostgreSQL
 
 ---
 

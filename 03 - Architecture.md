@@ -160,6 +160,12 @@ A Wallet controla:
 
 Uma alteração de saldo deve sempre estar relacionada a uma entrada correspondente no Ledger.
 
+No domínio implementado, `Wallet.open()` recebe identificadores, saldo inicial e data, e retorna `{ wallet, openingEntry }`. Uma abertura positiva exige os identificadores do lançamento e da transação interna OPENING; a criação e persistência dessa transação caberão à aplicação. A versão inicial permanece em 1. Abertura com zero não produz lançamento.
+
+`credit()` e `debit()` recebem valor, identificadores do lançamento e da transação, e data. Retornam o lançamento validado antes de alterar saldo, versão e data de atualização. Operações de valor zero não geram lançamento nem incrementam a versão; valores negativos são rejeitados. Falhas de validação ou overflow preservam o estado anterior. Essas garantias são locais ao objeto: unicidade, idempotência, persistência atômica e concorrência entre instâncias ainda dependerão do PostgreSQL.
+
+`rehydrate()` reconstrói o estado persistido sem repetir abertura ou movimentação. As datas são copiadas na entrada e nos getters para impedir alterações externas por métodos mutáveis de `Date`.
+
 ---
 
 ### WagerTransaction
@@ -190,6 +196,33 @@ Estados terminais:
 - FAILED
 
 Uma transação em estado terminal não pode voltar para outro estado.
+
+Implementação em `src/domain/wager-transaction.ts`: `create()` aceita operações externas e inicia em PENDING; rejeita OPENING. `createOpening()` é exclusiva do fluxo interno de criação da wallet e exige valor positivo. Os futuros adapters HTTP e SQS deverão usar somente `create()`; essa integração ainda não existe. `rehydrate()` reconstrói o estado persistido sem repetir as transições.
+
+Transições permitidas: PENDING → PENDING_REFERENCE, PROCESSED, REJECTED ou FAILED; PENDING_REFERENCE → PROCESSED, REJECTED ou FAILED. Repetir `markPendingReference()` enquanto aguarda uma referência é permitido e não muda o estado. Qualquer transição a partir de um estado terminal lança `InvalidTransactionStateError`. `processedAt` é preenchido somente ao marcar PROCESSED; rejeição/falha armazenam `failureCode`.
+
+REFUND e ROLLBACK exigem referência externa. WIN aceita referência opcional a uma BET; BET, LOSS e OPENING não aceitam referência. Autorrefêrencias são rejeitadas. O domínio valida a referência resolvida por provider/identificador externo, player, wallet, moeda, rodada, tipo permitido e status PROCESSED. Reversões exigem valor integral igual ao original; o prêmio de WIN pode diferir da BET. `markProcessed()` exige o identificador interno quando há referência externa; a aplicação deverá validar a referência antes de chamar esse método. Uma referência existente mas não processada produz `REFERENCE_NOT_PROCESSED`; a futura aplicação distinguirá espera de referência pendente e rejeição de referência terminal inválida.
+
+`ledgerDirectionFor()` retorna DEBIT para BET, CREDIT para WIN/REFUND/OPENING e a direção inversa para ROLLBACK. Retorna undefined para LOSS, valor zero e transações REJECTED/FAILED. Valor zero é aceito sem movimento financeiro; as demais validações de referência continuam necessárias na aplicação. `affectsBalance()` indica se a operação pode gerar movimentação, não se ela já foi aplicada. As referências e a ausência de reversões anteriores devem ser verificadas antes do processamento, independentemente desse resultado.
+
+`matchesPayload()` compara o SHA-256 hexadecimal persistido; `assertMatchesPayload()` lança `IdempotencyConflictError` quando diverge. A chave fornecida não é substituída por um valor calculado. Cálculo do JSON canônico/hash, replay do resultado, busca por chave e garantias de unicidade são responsabilidades futuras da aplicação e do PostgreSQL, não desta classe.
+
+Códigos iniciais de falha:
+
+| Código | Significado |
+| --- | --- |
+| INSUFFICIENT_BALANCE | Saldo insuficiente para aposta |
+| REVERSAL_INSUFFICIENT_BALANCE | Reversão causaria saldo negativo |
+| REFERENCE_NOT_FOUND | Referência não localizada; rejeição após esgotar espera |
+| REFERENCE_NOT_PROCESSED | Referência ainda não está PROCESSED |
+| INVALID_REFERENCE_KIND | Tipo de referência não permitido |
+| PROVIDER_MISMATCH / PLAYER_MISMATCH / WALLET_MISMATCH | Identidade da referência incompatível |
+| CURRENCY_MISMATCH / ROUND_MISMATCH | Moeda ou rodada incompatível |
+| REFERENCE_AMOUNT_MISMATCH | Valor da reversão diferente do original |
+| REFERENCE_ALREADY_REFUNDED / REFERENCE_ALREADY_ROLLED_BACK | Reversão do mesmo tipo já processada; futura verificação no banco |
+| PERMANENT_INFRASTRUCTURE_FAILURE | Falha permanente de infraestrutura |
+
+O conflito de idempotência é um erro separado: não altera nem rejeita a transação original já registrada.
 
 ---
 
@@ -224,6 +257,8 @@ Entradas do ledger não são alteradas nem excluídas.
 
 Uma reversão cria uma nova entrada em vez de modificar uma entrada anterior.
 
+`WalletLedgerEntry.create()` exige identificadores preenchidos, data válida, valor positivo, saldos não negativos, moedas iguais e aritmética consistente. `rehydrate()` apenas reconstrói o registro persistido. Os campos públicos são somente leitura e congelados em execução; o valor monetário é um Money imutável e a data é copiada. A proteção do ledger contra UPDATE/DELETE e a unicidade por wallet/transação serão implementadas no schema PostgreSQL.
+
 ---
 
 ## 4. Persistence
@@ -250,6 +285,14 @@ Exemplos de constraints:
 - mensagem Inbox única por consumer + messageId
 
 Migrations são versionadas e reversíveis.
+
+A tarefa 07 implementa PostgreSQL 17 em Docker Compose e MikroORM 7.2.0 com EntitySchema separado das classes de domínio. `DecimalType('string')` mapeia dinheiro para NUMERIC(20,2); mappers reconstroem Money e as entidades por `rehydrate()`. A lista de migrations é explícita, sem descoberta dependente de caminhos do código compilado. Não há sincronização automática de schema nem migrations no startup.
+
+A migration cria wallets, wager_transactions e wallet_ledger_entries com constraints de unicidade, checks monetários, foreign keys compostas e índices de leitura. Um índice único parcial impede duas reversões PROCESSED do mesmo tipo/referência, permitindo registrar tentativas rejeitadas. Triggers impedem UPDATE/DELETE/TRUNCATE do ledger e alterações de transações terminais ou de seus dados de negócio.
+
+Triggers diferidas verificam, no commit, saldo materializado contra a soma do ledger e a existência/correspondência de lançamentos de transações financeiras PROCESSED. O bloqueio é por wallet, não global. A soma completa do histórico é uma escolha conservadora com custo crescente, a ser medida nos testes de carga. Isso não substitui o futuro lock da aplicação nem os testes com três instâncias. Inbox/Outbox ainda serão adicionados em suas etapas.
+
+Os mapeamentos usam IDs escalares e a migration mantém as foreign keys compostas; a aplicação deve controlar a ordem de flush dentro de `em.transactional()`. O teste demonstra wallet → transação → ledger com um único commit. Cada unidade de trabalho usa `em.fork()` e recarrega o estado após rollback. Instruções completas e limitações: `docs/persistence.md`.
 
 ---
 

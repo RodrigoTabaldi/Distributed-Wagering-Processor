@@ -1,0 +1,64 @@
+# Persistência PostgreSQL — tarefa 07
+
+## Executar localmente
+
+Requisitos: Bun 1.x e Docker Desktop iniciado com containers Linux.
+
+```powershell
+bun install --frozen-lockfile
+Copy-Item .env.example .env # apenas se .env ainda não existir
+```
+
+Edite `DB_PASSWORD` no `.env` antes de iniciar o banco. Este arquivo é ignorado pelo Git. Na implementação inicial já foi criado um `.env` local com senha aleatória; preserve-o. Trocar a senha no arquivo depois da criação do volume não muda a senha do PostgreSQL existente.
+
+```powershell
+bun run db:up
+bun run db:migrate
+bun run db:pending
+bun run start:dev
+```
+
+O banco fica em `127.0.0.1:55432`, o serviço HTTP na porta 3000. Docker Compose mantém os dados no volume `postgres_data`. As credenciais configuradas são locais ao desafio; um ambiente de produção deverá separar o usuário de migrations do usuário da aplicação e limitar privilégios.
+
+## Verificações
+
+```powershell
+bun run test
+bun run test:integration
+bun run test:e2e
+bun x tsc --noEmit
+bun run lint
+bun run build
+```
+
+Os testes de integração usam exclusivamente `dwp_test`, criado no primeiro startup do volume pelo script `docker/postgres/init-test-database.sql`. Se o volume já existir sem esse banco, crie `dwp_test` manualmente; não remova um volume com dados para executar testes. As migrations de rollback são testadas em um schema descartável dentro desse banco. Cada teste usa identificadores próprios; o banco de desenvolvimento não é apagado.
+
+`bun run db:rollback` **remove as três tabelas financeiras e seus dados** ao reverter a migration inicial. Use apenas em um banco descartável. O startup da aplicação nunca executa migrations automaticamente.
+
+## Organização
+
+- `src/domain/`: regras financeiras, sem dependência de ORM.
+- `src/infrastructure/persistence/entities.ts`: mapeamento das colunas com EntitySchema.
+- `mappers.ts`: conversão entre colunas e objetos do domínio, usando as factories `rehydrate`.
+- `orm.config.ts`: conexão e lista explícita de migrations, também compatível com o build compilado.
+- `database.module.ts`: conexão injetável do NestJS e fechamento do pool.
+- `migrations/`: schema SQL versionado com `up` e `down`.
+- `test/integration/persistence.spec.ts`: testes reais do banco.
+
+`NUMERIC(20,2)` e `DecimalType('string')` preservam centavos sem conversão para `number`. A validação do contrato decimal continua obrigatória antes de persistir: PostgreSQL pode arredondar entradas com escala maior que a coluna, enquanto Money as rejeita.
+
+## Garantias implementadas
+
+Wallet única por jogador/moeda, saldo não negativo, unicidade de chave de idempotência e de transação externa por provedor, um lançamento por wallet/transação, aritmética do ledger, vínculos por jogador/wallet/moeda e uma reversão PROCESSED por referência/tipo.
+
+Triggers bloqueiam UPDATE, DELETE e TRUNCATE do ledger e alteração de payload/estado terminal de transações. Triggers diferidas verificam saldo versus soma do ledger e correspondência de transações financeiras processadas com lançamentos no commit. Elas permitem gravar tudo na mesma transação SQL; qualquer falha desfaz o conjunto.
+
+Os vínculos compostos são definidos na migration. Como os mapeamentos usam IDs escalares, o ORM não infere a ordem dessas dependências: a aplicação deverá fazer flush de wallet, depois transação e depois ledger dentro de um único `em.transactional()`, como demonstrado no teste. Cada execução usa `em.fork()` para isolar o contexto de entidades. Em caso de rollback, descarte o estado de domínio alterado e recarregue os dados antes de um retry.
+
+## Limites desta etapa
+
+Ainda não há repositories, endpoints financeiros, Inbox, Outbox, consumer SQS ou workers. As constraints de unicidade são a base da idempotência; o replay e a resolução de disputas serão implementados na aplicação. A estratégia de lock por wallet ainda deverá ser implementada e validada com múltiplos processos.
+
+A reconciliação no commit soma todo o ledger da wallet e usa bloqueio somente dessa wallet. É uma escolha conservadora de correção para o desafio, com custo crescente conforme o histórico aumenta; desempenho de hot wallets deverá ser medido posteriormente. O índice `(wallet_id, created_at, id)` prepara a leitura por cursor. O campo `observed_balance` reserva a persistência do saldo da resposta original, inclusive em operações sem ledger; a aplicação ainda deverá preenchê-lo e utilizá-lo no replay.
+
+As constraints, índices e triggers são mantidos nas migrations SQL. Não use geração automática de schema para substituir migrations, pois o mapeamento EntitySchema não descreve todas essas garantias.
