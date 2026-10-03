@@ -313,26 +313,26 @@ Objetivo: separar regras de negócio de persistência.
 
 Wallet repository:
 
-- [ ] Buscar wallet
-- [ ] Buscar wallet com lock
-- [ ] Criar wallet
-- [ ] Salvar wallet
-- [ ] Verificar existência
+- [x] Buscar wallet
+- [x] Buscar wallet com lock
+- [x] Criar wallet
+- [x] Salvar wallet
+- [x] Verificar existência
 
 Wager repository:
 
-- [ ] Buscar por id
-- [ ] Buscar por provider + externalTransactionId
-- [ ] Buscar por idempotencyKey
-- [ ] Criar transação
-- [ ] Atualizar estado
+- [x] Buscar por id
+- [x] Buscar por provider + externalTransactionId
+- [x] Buscar por idempotencyKey
+- [x] Criar transação
+- [x] Atualizar estado
 
 Ledger repository:
 
-- [ ] Criar lançamento
-- [ ] Buscar lançamentos da wallet
-- [ ] Buscar lançamento por transaction
-- [ ] Suportar paginação
+- [x] Criar lançamento
+- [x] Buscar lançamentos da wallet
+- [x] Buscar lançamento por transaction
+- [x] Suportar paginação
 
 ---
 
@@ -355,19 +355,19 @@ request
 
 Implementação:
 
-- [ ] Criar DTO
-- [ ] Criar controller
-- [ ] Criar use case
-- [ ] Validar playerId
-- [ ] Validar Money
-- [ ] Verificar wallet duplicada
-- [ ] Criar Wallet
-- [ ] Se initialBalance > 0, criar transação OPENING
-- [ ] Criar ledger CREDIT correspondente
-- [ ] Salvar tudo na mesma transaction SQL
-- [ ] Retornar wallet criada
-- [ ] Retornar conflito quando já existir wallet para player + currency
-- [ ] Criar testes
+- [x] Criar DTO
+- [x] Criar controller
+- [x] Criar use case
+- [x] Validar playerId
+- [x] Validar Money
+- [x] Verificar wallet duplicada
+- [x] Criar Wallet
+- [x] Se initialBalance > 0, criar transação OPENING
+- [x] Criar ledger CREDIT correspondente
+- [x] Salvar tudo na mesma transaction SQL
+- [x] Retornar wallet criada
+- [x] Retornar conflito quando já existir wallet para player + currency
+- [x] Criar testes
 
 ---
 
@@ -388,21 +388,21 @@ BET
 
 Implementação:
 
-- [ ] Criar processamento de BET
-- [ ] Validar wallet
-- [ ] Validar player
-- [ ] Validar moeda
-- [ ] Validar saldo disponível
-- [ ] Executar `Wallet.debit()`
-- [ ] Criar ledger DEBIT
-- [ ] Marcar transação como PROCESSED
-- [ ] Incrementar version da wallet
-- [ ] Salvar tudo atomicamente
-- [ ] Rejeitar saldo insuficiente
-- [ ] Criar failureCode para saldo insuficiente
-- [ ] Não alterar saldo quando rejeitada
-- [ ] Não criar ledger quando rejeitada
-- [ ] Criar testes
+- [x] Criar processamento de BET
+- [x] Validar wallet
+- [x] Validar player
+- [x] Validar moeda
+- [x] Validar saldo disponível
+- [x] Executar `Wallet.debit()`
+- [x] Criar ledger DEBIT
+- [x] Marcar transação como PROCESSED
+- [x] Incrementar version da wallet
+- [x] Salvar tudo atomicamente
+- [x] Rejeitar saldo insuficiente
+- [x] Criar failureCode para saldo insuficiente
+- [x] Não alterar saldo quando rejeitada
+- [x] Não criar ledger quando rejeitada
+- [x] Criar testes
 
 ---
 

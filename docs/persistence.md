@@ -55,9 +55,19 @@ Triggers bloqueiam UPDATE, DELETE e TRUNCATE do ledger e alteração de payload/
 
 Os vínculos compostos são definidos na migration. Como os mapeamentos usam IDs escalares, o ORM não infere a ordem dessas dependências: a aplicação deverá fazer flush de wallet, depois transação e depois ledger dentro de um único `em.transactional()`, como demonstrado no teste. Cada execução usa `em.fork()` para isolar o contexto de entidades. Em caso de rollback, descarte o estado de domínio alterado e recarregue os dados antes de um retry.
 
-## Limites desta etapa
+## Repositories — tarefa 08
 
-Ainda não há repositories, endpoints financeiros, Inbox, Outbox, consumer SQS ou workers. As constraints de unicidade são a base da idempotência; o replay e a resolução de disputas serão implementados na aplicação. A estratégia de lock por wallet ainda deverá ser implementada e validada com múltiplos processos.
+Os contratos ficam em `src/application/ports/repositories.ts`; implementações em `src/infrastructure/persistence/repositories.ts`. `PostgreSqlUnitOfWork` é injetado pelo token `UNIT_OF_WORK`, exportado por DatabaseModule. As interfaces retornam objetos do domínio, não registros do ORM.
+
+Use `unitOfWork.transaction(async ({ wallets, wagers, ledger }) => { ... })` para gravações. Todos os repositories compartilham a mesma transação; uma falha na callback ou no commit desfaz o conjunto. Crie wallet → transação → ledger nessa ordem. Os INSERTs são imediatos, sem commits individuais. `findByIdForUpdate()` exige uma transação e bloqueia somente a wallet escolhida.
+
+`wallets.save(wallet, expectedVersion)` exige a versão lida antes da movimentação; `wagers.updateState(transaction, expectedStatus, at, observedBalance)` exige o estado lido antes da transição. Um UPDATE sem registro correspondente lança PersistenceConflictError. A aplicação deverá recarregar os objetos após rollback; não existe retry automático nesta etapa.
+
+`unitOfWork.read()` disponibiliza consultas em um contexto isolado, sem consistência de snapshot entre múltiplas leituras. O ledger usa cursor opaco versionado e vinculado à wallet, preservando microssegundos e desempate por ID. Limites: padrão 50, máximo 100. Não há métodos de edição/exclusão do ledger. Testes em `test/integration/repositories.spec.ts`.
+
+## Limites destas etapas
+
+Ainda não há endpoints financeiros, Inbox, Outbox, consumer SQS ou workers. As constraints de unicidade são a base da idempotência; o replay e a resolução de disputas serão implementados na aplicação. O lock por wallet foi testado em sessões independentes; o fluxo financeiro completo ainda deverá ser validado com múltiplos processos.
 
 A reconciliação no commit soma todo o ledger da wallet e usa bloqueio somente dessa wallet. É uma escolha conservadora de correção para o desafio, com custo crescente conforme o histórico aumenta; desempenho de hot wallets deverá ser medido posteriormente. O índice `(wallet_id, created_at, id)` prepara a leitura por cursor. O campo `observed_balance` reserva a persistência do saldo da resposta original, inclusive em operações sem ledger; a aplicação ainda deverá preenchê-lo e utilizá-lo no replay.
 

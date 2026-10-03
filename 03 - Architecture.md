@@ -294,6 +294,14 @@ Triggers diferidas verificam, no commit, saldo materializado contra a soma do le
 
 Os mapeamentos usam IDs escalares e a migration mantém as foreign keys compostas; a aplicação deve controlar a ordem de flush dentro de `em.transactional()`. O teste demonstra wallet → transação → ledger com um único commit. Cada unidade de trabalho usa `em.fork()` e recarrega o estado após rollback. Instruções completas e limitações: `docs/persistence.md`.
 
+A tarefa 08 adiciona contratos de repositories e UnitOfWork em `src/application/ports/repositories.ts`, sem dependência de ORM. As implementações PostgreSQL ficam em `infrastructure/persistence/`. `UNIT_OF_WORK` é o token de injeção NestJS exportado por DatabaseModule; o futuro caso de uso recebe a porta UnitOfWork.
+
+`transaction(callback)` cria um contexto isolado com `em.fork().transactional()` e entrega os três repositories sobre o mesmo EntityManager. INSERTs imediatos preservam a ordem das foreign keys e continuam no mesmo commit. Gravações e locks são recusados fora de uma transação ativa. `read(callback)` cria um contexto isolado para consultas, sem prometer snapshot consistente entre várias consultas; a reconciliação deverá usar transação e lock apropriados.
+
+WalletRepository usa SELECT FOR UPDATE para a wallet escolhida e UPDATE condicionado à versão esperada como proteção adicional contra gravações desatualizadas. WagerRepository oferece buscas por ID, provedor/ID externo e chave de idempotência; atualiza somente os campos de estado, condicionado ao estado esperado, e permite salvar observed_balance. Não resolve replay nem retries automaticamente. Consultas mutáveis usam refresh para não reutilizar valores antigos do Identity Map após updates nativos.
+
+LedgerRepository oferece apenas inserção e consultas. A paginação usa cursor base64url versionado e vinculado à wallet, limite padrão 50/máximo 100 e ordenação crescente por (created_at, id), sem OFFSET. O cursor conserva os microssegundos do PostgreSQL; a data dos objetos de domínio conserva a precisão de milissegundos de Date. A paginação é uma consulta ao histórico disponível, não um snapshot congelado entre requisições. Testes reais cobrem datas iguais, microssegundos, limites, cursores inválidos, rollback, conflitos de versão/estado e locks em sessões independentes.
+
 ---
 
 ## 5. Transactions
