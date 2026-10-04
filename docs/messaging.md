@@ -54,7 +54,7 @@ O fluxo financeiro não chama SQS. Falha ao salvar qualquer evento desfaz Inbox,
 
 ## 24 — Publisher
 
-`src/application/publish-outbox.ts` inicia uma transação independente e seleciona um evento confirmado e devido com FOR UPDATE SKIP LOCKED. Mantém o lock do registro durante SendMessage; outros publishers pulam esse registro, sem bloquear wallets. É uma escolha simples para o desafio; o pool precisa comportar publishers e consumidores, e cada requisição SQS tem timeout e tentativas limitadas.
+`src/application/publish-outbox.ts` confirma um claim com FOR UPDATE SKIP LOCKED em transação curta. A migration 005 adiciona claim_token e lease_expires_at, com constraints de pareamento/validade e índice de recuperação. O lease de 90 s usa o relógio do banco. SendMessage ocorre fora da transação SQL. A confirmação usa o token e verifica o prazo antes de marcar publicação ou reagendar; um dono antigo não altera o registro. Se o processo morrer ou o commit final falhar, outra instância retoma após expiração, preservando eventId. O token protege o banco, mas não cancela um envio SQS já em voo; entrega duplicada continua possível e exige deduplicação no consumidor.
 
 Após sucesso, marca publishedAt e confirma o commit. Falha de envio incrementa attempts e salva backoff de 1, 2, 4… até 60s. Falha do commit após envio mantém o evento pendente; a próxima tentativa usa o mesmo eventId e corpo. SQS FIFO usa eventId como MessageDeduplicationId e aggregateId como MessageGroupId. A publicação é **ao menos uma vez**: a deduplicação FIFO é temporária, portanto consumidores dos eventos devem deduplicar eventId persistentemente. Não há promessa de publicação exatamente uma vez ou de ordenação global entre publishers concorrentes.
 
@@ -84,6 +84,6 @@ docker compose run --rm --no-deps messaging-test
 
 `test/helpers/messaging-worker.ts` permite matar processos reais após commit e antes do ACK/publicação, e enviar SIGTERM durante consulta bloqueada. IDs de evento e ledger são conferidos após recuperação; saldo é reconciliado com a soma do ledger. A infraestrutura de teste limpa somente recursos gerados por ela e encerra seus processos antes de remover o schema.
 
-Essas etapas não substituem as próximas tarefas de health, métricas, autenticação e recuperação operacional. Permissões IAM de produção e monitoramento da DLQ/idade da Outbox deverão acompanhar a implantação; credenciais locais não são uma configuração de produção.
+Health, métricas e recuperação operacional estão implementados; a autenticação foi omitida conforme a opção permitida no desafio. Permissões IAM de produção e monitoramento da DLQ/idade da Outbox deverão acompanhar a implantação; credenciais locais não são uma configuração de produção.
 
 Referências oficiais utilizadas: [SDK JavaScript SQS](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/javascript_sqs_code_examples.html), [visibilidade e redelivery](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html), [dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html) e [LocalStack SQS](https://docs.localstack.cloud/aws/services/sqs/).

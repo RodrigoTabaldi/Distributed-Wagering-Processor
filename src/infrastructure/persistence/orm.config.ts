@@ -11,6 +11,7 @@ import { Migration202610030001 } from './migrations/Migration202610030001.js';
 import { Migration202610030002 } from './migrations/Migration202610030002.js';
 import { Migration202610030003 } from './migrations/Migration202610030003.js';
 import { Migration202610030004 } from './migrations/Migration202610030004.js';
+import { Migration202610040005 } from './migrations/Migration202610040005.js';
 
 // Credenciais vêm do ambiente; nunca são registradas em logs ou versionadas.
 export function createOrmConfig(dbName = process.env.DB_NAME ?? 'dwp') {
@@ -39,6 +40,7 @@ export function createOrmConfig(dbName = process.env.DB_NAME ?? 'dwp') {
         Migration202610030002,
         Migration202610030003,
         Migration202610030004,
+        Migration202610040005,
       ],
       transactional: true,
       allOrNothing: true,

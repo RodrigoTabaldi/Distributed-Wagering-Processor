@@ -9,6 +9,7 @@ import {
   Post,
   Res,
   UnprocessableEntityException,
+  HttpException,
 } from '@nestjs/common';
 import {
   SubmitWager,
@@ -85,6 +86,9 @@ export class WagerController {
     // 422 diferencia rejeição financeira de payload inválido e de conflito de idempotência.
     if (result.status === WagerTransactionStatus.Rejected)
       throw new UnprocessableEntityException(result);
+    // 502 indica falha técnica terminal; 503 continua reservado a falhas que permitem retry.
+    if (result.status === WagerTransactionStatus.Failed)
+      throw new HttpException(result, 502);
     // Referência fora de ordem é aceite pendente (202), sem crédito antecipado.
     if (result.status === WagerTransactionStatus.PendingReference)
       response.status(202);

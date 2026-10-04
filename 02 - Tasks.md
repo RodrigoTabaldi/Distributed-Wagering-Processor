@@ -1220,7 +1220,7 @@ Para cada decisão importante conseguir responder:
 
 Fazer somente depois dos requisitos obrigatórios.
 
-OpenAPI, tracing, dashboard e carga implementados e verificados. Partidas dobradas ficam como evolução opcional documentada em `ARCHITECTURE.md`; não fazem parte da funcionalidade entregue.
+OpenAPI, tracing, dashboard e carga implementados e verificados. Partidas dobradas ficam como evolução opcional documentada em `03 - Architecture.md`; não fazem parte da funcionalidade entregue.
 
 - [x] Swagger / OpenAPI
 - [x] OpenTelemetry

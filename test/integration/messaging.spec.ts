@@ -16,6 +16,7 @@ import {
   type SubmitWagerInput,
 } from '../../src/application/submit-wager.js';
 import { PublishOutbox } from '../../src/application/publish-outbox.js';
+import { PermanentInfrastructureError } from '../../src/application/errors.js';
 import { ReprocessPendingReferences } from '../../src/application/reprocess-pending-references.js';
 import type {
   UnitOfWork,
@@ -69,12 +70,20 @@ async function childWorker() {
     },
   );
   children.push(child);
-  const messages: { phase: string; name?: string; receiptHandle?: string }[] =
-    [];
+  const messages: {
+    phase: string;
+    name?: string;
+    receiptHandle?: string;
+    eventId?: string;
+  }[] = [];
   child.on(
     'message',
-    (message: { phase: string; name?: string; receiptHandle?: string }) =>
-      messages.push(message),
+    (message: {
+      phase: string;
+      name?: string;
+      receiptHandle?: string;
+      eventId?: string;
+    }) => messages.push(message),
   );
   const wait = (phase: string) =>
     poll(
@@ -445,6 +454,115 @@ describe('SQS, Inbox, events, Outbox and recovery', () => {
     ).toBe('0');
   });
 
+  it('rolls back the debit, persists FAILED atomically and resumes DLQ after a failed send', async () => {
+    const { wallet, envelope, input, key } = await seed();
+    await send(envelope);
+    let first = true;
+    const failing = intercept((session) => ({
+      ...session,
+      outbox: new Proxy(session.outbox, {
+        get(target, property) {
+          if (property === 'create')
+            return async (...args: Parameters<typeof target.create>) => {
+              // A falha acontece depois das gravações financeiras: o rollback precisa desfazer tudo.
+              if (first) {
+                first = false;
+                throw new PermanentInfrastructureError();
+              }
+              return target.create(...args);
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }),
+    }));
+    const original = await delivery();
+    const missingDlq = new SqsTransport(
+      client,
+      { ...urls, dlq: `${urls.dlq}-missing` },
+      0,
+    );
+    expect(
+      await failure(consumer(failing, missingDlq).handle(original)),
+    ).toBeInstanceOf(Error);
+    const failed = await new SubmitWager(uow).execute(input, key);
+    expect(failed).toMatchObject({
+      status: 'FAILED',
+      failureCode: FailureCode.PermanentInfrastructureFailure,
+      idempotentReplay: true,
+      balance: { amount: '100.00', currency: 'BRL' },
+    });
+    expect((await state(wallet.id)).balance).toBe('100.00');
+    expect(
+      (await sql('SELECT count(*) AS total FROM inbox_messages'))[0].total,
+    ).toBe('1');
+    expect(
+      (
+        await sql(
+          `SELECT event_type FROM outbox_messages WHERE payload->'data'->>'transactionId' = ?`,
+          [failed.transactionId],
+        )
+      ).map((row) => row.event_type),
+    ).toEqual(['WagerTransactionFailed']);
+    await transport.changeVisibility(original, 0);
+    expect(await consumer().handle(await delivery())).toBe('dead-lettered');
+    expect((await events(urls.dlq))[0]?.Body).toBe(JSON.stringify(envelope));
+    // Uma mudança posterior não pode alterar o saldo devolvido no replay da falha original.
+    await new SubmitWager(uow).execute(
+      { ...input, externalTransactionId: crypto.randomUUID() },
+      crypto.randomUUID(),
+    );
+    expect(await new SubmitWager(uow).execute(input, key)).toEqual(failed);
+  });
+
+  it('keeps the source recoverable when permanent-failure audit cannot commit', async () => {
+    const { wallet, envelope } = await seed();
+    await send(envelope);
+    const alwaysFailing = intercept((session) => ({
+      ...session,
+      outbox: new Proxy(session.outbox, {
+        get(target, property) {
+          if (property === 'create')
+            return async () => {
+              throw new PermanentInfrastructureError();
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }),
+    }));
+    const original = await delivery();
+    expect(
+      await failure(consumer(alwaysFailing).handle(original)),
+    ).toBeInstanceOf(Error);
+    expect(await events(urls.dlq)).toEqual([]);
+    expect((await state(wallet.id)).balance).toBe('100.00');
+    expect(
+      (await sql('SELECT count(*) AS total FROM inbox_messages'))[0].total,
+    ).toBe('0');
+    await transport.changeVisibility(original, 0);
+    expect(await consumer().handle(await delivery())).toBe('acknowledged');
+    expect((await state(wallet.id)).balance).toBe('90.00');
+  });
+
+  it('publishes direction, exact money and wallet version for each balance movement', async () => {
+    const { input, key, wallet } = await seed();
+    const result = await new SubmitWager(uow).execute(input, key);
+    const [event] = await sql(
+      `SELECT payload FROM outbox_messages WHERE event_type = 'WalletBalanceChanged' AND payload->'data'->>'transactionId' = ?`,
+      [result.transactionId],
+    );
+    expect(event.payload.data).toEqual({
+      walletId: wallet.id,
+      transactionId: result.transactionId,
+      direction: 'DEBIT',
+      money: { amount: '10.00', currency: 'BRL' },
+      balanceBefore: { amount: '100.00', currency: 'BRL' },
+      balanceAfter: { amount: '90.00', currency: 'BRL' },
+      walletVersion: 2,
+    });
+  });
+
   it('uses the configured redrive policy after five unacknowledged receives', async () => {
     const { envelope } = await seed();
     const attributes = await client.send(
@@ -623,6 +741,139 @@ describe('SQS, Inbox, events, Outbox and recovery', () => {
     ).toBe('2');
   });
 
+  it('releases its only SQL connection while an SQS send is blocked', async () => {
+    const { wallet } = await seed();
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const active = new PublishOutbox(uow, {
+      publish: async (message) => {
+        entered();
+        await gate;
+        await transport.publish(message);
+      },
+    }).runOne();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await ready;
+      // Este pool tem max=1. O desenho anterior ficaria esperando a conexão ocupada pelo envio.
+      const query = uow.read(({ wallets }) => wallets.findById(wallet.id));
+      const result = await Promise.race([
+        query,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(new Error('Publisher held the SQL connection during I/O')),
+            2000,
+          );
+        }),
+      ]);
+      expect(result?.id).toBe(wallet.id);
+    } finally {
+      clearTimeout(timer);
+      release();
+      await active;
+    }
+  });
+
+  it('recovers an expired claim and fences both successful and failed stale publishers', async () => {
+    await seed();
+    const oldToken = crypto.randomUUID();
+    const old = await uow.transaction(({ outbox }) =>
+      outbox.claimNextDue(new Date(), oldToken, 90000),
+    );
+    expect(old).toBeDefined();
+    // Pareia token e validade no schema; não permite reservas impossíveis de recuperar.
+    expect(
+      await failure(
+        sql('UPDATE outbox_messages SET lease_expires_at = NULL WHERE id = ?', [
+          old!.id,
+        ]),
+      ),
+    ).toMatchObject({ code: '23514' });
+    await sql(
+      "UPDATE outbox_messages SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ?",
+      [old!.id],
+    );
+    // Mesmo sem novo dono, uma reserva vencida não pode confirmar o envio.
+    old!.markPublished(new Date());
+    expect(
+      await uow.transaction(({ outbox }) => outbox.saveClaimed(old!, oldToken)),
+    ).toBe(false);
+    const newToken = crypto.randomUUID();
+    const current = await uow.transaction(({ outbox }) =>
+      outbox.claimNextDue(new Date(), newToken, 90000),
+    );
+    expect(current?.id).toBe(old!.id);
+    expect(
+      await uow.transaction(({ outbox }) => outbox.saveClaimed(old!, oldToken)),
+    ).toBe(false);
+    expect(
+      (await uow.read(({ outbox }) => outbox.findById(old!.id)))?.isPending(),
+    ).toBe(true);
+    // O dono atual conclui; um erro tardio do antigo também não pode desfazer a publicação.
+    const staleRetry = await uow.read(({ outbox }) => outbox.findById(old!.id));
+    current!.markPublished(new Date());
+    expect(
+      await uow.transaction(({ outbox }) =>
+        outbox.saveClaimed(current!, newToken),
+      ),
+    ).toBe(true);
+    staleRetry!.scheduleRetry(new Date());
+    expect(
+      await uow.transaction(({ outbox }) =>
+        outbox.saveClaimed(staleRetry!, oldToken),
+      ),
+    ).toBe(false);
+    expect(
+      (await uow.read(({ outbox }) => outbox.findById(old!.id)))?.isPending(),
+    ).toBe(false);
+  });
+
+  it.each(['before-outbox-send', 'after-outbox-send'])(
+    'recovers a real publisher process killed %s without losing its event',
+    async (action) => {
+      await seed();
+      const first = await childWorker();
+      first.child.send({ action });
+      const claimed = await first.wait('outbox-claimed');
+      expect(claimed?.eventId).toBeDefined();
+      await stopChild(first.child);
+      const [saved] = await sql(
+        'SELECT claim_token, published_at FROM outbox_messages WHERE id = ?',
+        [claimed!.eventId],
+      );
+      expect(saved.claim_token).not.toBeNull();
+      expect(saved.published_at).toBeNull();
+      // Só aceleramos o prazo persistido; a retomada e o envio são feitos por outro processo real.
+      await sql(
+        "UPDATE outbox_messages SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ?",
+        [claimed!.eventId],
+      );
+      const second = await childWorker();
+      second.child.send({ action: 'publish' });
+      await second.wait('closed');
+      const [recovered] = await sql(
+        'SELECT claim_token, published_at, payload FROM outbox_messages WHERE id = ?',
+        [claimed!.eventId],
+      );
+      expect(recovered.claim_token).toBeNull();
+      expect(recovered.published_at).not.toBeNull();
+      expect(recovered.payload.eventId).toBe(claimed!.eventId);
+      const messages = await events();
+      expect(
+        messages.some(
+          (message) => JSON.parse(message.Body!).eventId === claimed!.eventId,
+        ),
+      ).toBe(true);
+    },
+  );
+
   it('publisher shutdown waits for active send and leaves remaining events pending', async () => {
     await seed();
     let release!: () => void;
@@ -704,7 +955,7 @@ describe('SQS, Inbox, events, Outbox and recovery', () => {
       ...session,
       outbox: new Proxy(session.outbox, {
         get(target, key) {
-          if (key === 'save')
+          if (key === 'saveClaimed')
             return async () => {
               throw new Error('Crash after send');
             };
@@ -723,6 +974,10 @@ describe('SQS, Inbox, events, Outbox and recovery', () => {
     expect(
       await failure(new PublishOutbox(broken, publisher).runOne()),
     ).toBeInstanceOf(Error);
+    // A reserva sobrevive ao crash. Avançamos só seu vencimento para não esperar 90 s no teste.
+    await sql(
+      "UPDATE outbox_messages SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE claim_token IS NOT NULL",
+    );
     expect(await new PublishOutbox(uow, publisher).runOne()).toBe('published');
     expect(sent[0]).toBe(sent[1]);
     expect(

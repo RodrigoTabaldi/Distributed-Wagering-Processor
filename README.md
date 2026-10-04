@@ -33,7 +33,7 @@ O entrypoint compilado é `dist/main.js`, conforme `rootDir: src` em `tsconfig.b
 
 ## API
 
-`GET /openapi.json` publica OpenAPI 3.0.3, importável no Postman/Swagger Editor. **A demonstração não autentica usuários/provedores.** Veja a decisão e a extensão OIDC em [ARCHITECTURE.md](ARCHITECTURE.md).
+`GET /openapi.json` publica OpenAPI 3.0.3, importável no Postman/Swagger Editor. **A demonstração não autentica usuários/provedores.** Veja a decisão e a extensão OIDC em [03 - Architecture.md](<03 - Architecture.md>).
 
 | Método | Endpoint                                                              | Finalidade                                                             |
 | ------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -84,24 +84,26 @@ Replay mantém saldo `75.00`, versão 2 e apenas um DEBIT. WIN credita; LOSS só
 | 409    | Wallet duplicada ou conflito de chave/identidade/payload         |
 | 422    | Rejeição financeira persistida com `failureCode`                 |
 | 503    | Infraestrutura/conflito SQL transitório; retry com a mesma chave |
+| 502    | Falha técnica terminal persistida como FAILED; não repetir automaticamente |
 | 500    | Erro inesperado sem revelar detalhes do driver                   |
 
 ## SQS e testes
 
-Filas: `wager-transactions.fifo`, `wager-transactions-dlq.fifo`, `wager-events.fifo`. Entrada agrupada por wallet; envelope validado em `src/interfaces/sqs/wager-envelope.ts`. Consumer usa Inbox e o mesmo caso de uso do HTTP, confirmando ACK após commit. Outbox publica eventos versionados somente depois do commit; consumidores externos precisam deduplicar eventId. Retry/DLQ/Pending Reference/shutdown: [ARCHITECTURE.md](ARCHITECTURE.md).
+Filas: `wager-transactions.fifo`, `wager-transactions-dlq.fifo`, `wager-events.fifo`. Entrada agrupada por wallet; envelope validado em `src/interfaces/sqs/wager-envelope.ts`. Consumer usa Inbox e o mesmo caso de uso do HTTP, confirmando ACK após commit. Outbox publica eventos versionados somente depois do commit; consumidores externos precisam deduplicar eventId. Retry/DLQ/Pending Reference/shutdown: [03 - Architecture.md](<03 - Architecture.md>).
 
 ```powershell
 bun run test
 bun run test:integration
 bun run test:e2e
-bunx tsc --noEmit
+bun run typecheck
+bun run format:check
 bun run lint
 bun run build
 # SIGTERM nativo Linux:
 docker compose run --rm --no-deps messaging-test
 ```
 
-Integração usa PostgreSQL/SQS reais via LocalStack, schemas/filas próprios quando necessário e três processos Bun. O teste de indisponibilidade cria/encerra um container PostgreSQL próprio. Não aponte `dwp_test` para produção. Critérios/evidências: [docs/evaluation.md](docs/evaluation.md). Estudo/apresentação: [docs/presentation.md](docs/presentation.md). Documentos 01–04 preservam enunciado/planejamento; ARCHITECTURE descreve a implementação atual.
+Integração usa PostgreSQL/SQS reais via LocalStack, schemas/filas próprios quando necessário e três processos Bun. O teste de indisponibilidade cria/encerra um container PostgreSQL próprio. Não aponte `dwp_test` para produção. Critérios/evidências: [docs/evaluation.md](docs/evaluation.md). Estudo/apresentação: [docs/presentation.md](docs/presentation.md). A documentação segue a ordem: [01 - Challenge.md](<01 - Challenge.md>), [02 - Tasks.md](<02 - Tasks.md>) e [03 - Architecture.md](<03 - Architecture.md>). O documento 03 corresponde ao ARCHITECTURE.md solicitado no enunciado e descreve a implementação atual.
 
 ## Extras opcionais
 
@@ -126,3 +128,17 @@ bun run test:load
 Carga cria API isolada em porta aleatória, schema `load_test_*` em `dwp_test` e filas próprias; usa publisher SQS real em paralelo. Mede wallets diferentes, mesma wallet e 50 duplicatas. [docs/load-results.json](docs/load-results.json) é substituído a cada execução e registra ambiente, throughput, p50/p95/p99, erros, conflitos e lag amostrado. Percentis nearest-rank incluem a resposta; aquecimento é separado. Auditoria final verifica saldo/ledger, efeito único e backlog zero antes da limpeza.
 
 Carga local usa uma API/oito conexões; não é benchmark produtivo. Prova multiprocesso está na integração. Throughput de replay não equivale a novos efeitos financeiros. Partidas dobradas ficam como evolução opcional: exigem definir contas de contrapartida e novas migrations além do ledger por wallet requerido.
+
+## Verificação automática e histórico maior
+
+`.github/workflows/ci.yml` executa instalação pelo lockfile, formatação, tipos, lint, unitários, build, integração real e E2E no Linux. A integração inclui três processos e SIGTERM nativo. O workflow ainda precisa de uma execução no GitHub; os checks locais não equivalem a um resultado publicado de CI.
+
+```powershell
+bun run test:load:history
+```
+
+Esse experimento prepara 500 apostas na wallet disputada e acrescenta 25 ms de atraso antes de cada envio SQS real. Salva `docs/load-history-results.json`, sem substituir o resultado da carga padrão. `LOAD_HISTORY_ENTRIES`, `LOAD_SQS_DELAY_MS` e `LOAD_DRAIN_TIMEOUT_MS` permitem ajustar o experimento. O histórico fica fora dos percentis, mas entra na auditoria final; backlog e atraso de publicação incluem a preparação. Veja [docs/performance.md](docs/performance.md).
+
+## Publicação sem ocupar conexão SQL
+
+A Outbox usa reserva persistida por 90 s e token de propriedade. O envio SQS ocorre depois de confirmar a reserva, fora da transação SQL. Outra instância retoma claims vencidos; tokens antigos não podem confirmar nem reagendar o evento. Antes de iniciar esta versão, pare publishers antigos e execute bun run db:migrate. Veja custos, política de rollout e garantias em [03 - Architecture.md](<03 - Architecture.md>).

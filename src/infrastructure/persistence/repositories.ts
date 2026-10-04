@@ -60,29 +60,48 @@ export class PostgreSqlOutboxRepository implements OutboxRepository {
     );
     return row ? outboxFromRecord(row) : undefined;
   }
-  async lockNextDue(now: Date): Promise<OutboxMessage | undefined> {
+  async claimNextDue(
+    now: Date,
+    token: string,
+    leaseMs: number,
+  ): Promise<OutboxMessage | undefined> {
     requireTransaction(this.em);
-    // A transação mantém o lock até confirmar publicação/retry. Outro publisher pula este registro.
+    if (
+      !Number.isFinite(now.getTime()) ||
+      !Number.isSafeInteger(leaseMs) ||
+      leaseMs < 1
+    )
+      throw new Error('Invalid Outbox lease');
+    // SKIP LOCKED arbitra o claim. O relógio do banco evita diferenças de horário entre instâncias.
     const rows = await this.em.execute(
-      `SELECT id FROM outbox_messages
-      WHERE published_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
-      ORDER BY occurred_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`,
-      [now],
+      `WITH candidate AS (
+        SELECT id FROM outbox_messages
+        WHERE published_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+          AND (lease_expires_at IS NULL OR lease_expires_at <= clock_timestamp())
+        ORDER BY occurred_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
+      ) UPDATE outbox_messages AS message
+        SET claim_token = ?::uuid, lease_expires_at = clock_timestamp() + (? * interval '1 millisecond')
+        FROM candidate WHERE message.id = candidate.id RETURNING message.id`,
+      [now, token, leaseMs],
     );
     return rows.length ? this.findById(rows[0].id) : undefined;
   }
-  async save(message: OutboxMessage, expectedAttempts: number): Promise<void> {
+  async saveClaimed(message: OutboxMessage, token: string): Promise<boolean> {
     requireTransaction(this.em);
-    const affected = await this.em.nativeUpdate(
-      OutboxMessageEntity,
-      { id: message.id, attempts: expectedAttempts, publishedAt: null },
-      {
-        attempts: message.attempts,
-        nextAttemptAt: message.nextAttemptAt ?? null,
-        publishedAt: message.publishedAt ?? null,
-      },
+    const rows = await this.em.execute(
+      `UPDATE outbox_messages SET attempts = ?, next_attempt_at = ?, published_at = ?,
+        claim_token = NULL, lease_expires_at = NULL
+        WHERE id = ? AND claim_token = ?::uuid AND lease_expires_at > clock_timestamp()
+          AND published_at IS NULL RETURNING id`,
+      [
+        message.attempts,
+        message.nextAttemptAt ?? null,
+        message.publishedAt ?? null,
+        message.id,
+        token,
+      ],
     );
-    if (affected !== 1) throw new PersistenceConflictError();
+    return rows.length === 1;
   }
 }
 

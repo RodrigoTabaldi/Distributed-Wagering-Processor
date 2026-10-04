@@ -3,6 +3,7 @@ import { OutboxMessage } from './outbox-message.js';
 import { WalletBalanceChanged } from './wager-events.js';
 import { Money } from './money.js';
 import { immutableJson } from './integration-event.js';
+import { LedgerDirection } from './wallet-ledger-entry.js';
 
 const event = () =>
   new WalletBalanceChanged({
@@ -16,6 +17,9 @@ const event = () =>
       walletId: crypto.randomUUID(),
       balanceBefore: { amount: '100.00', currency: 'BRL' },
       balanceAfter: { amount: '90.00', currency: 'BRL' },
+      direction: LedgerDirection.Debit,
+      money: { amount: '10.00', currency: 'BRL' },
+      walletVersion: 2,
     },
   });
 describe('integration event and Outbox domain', () => {

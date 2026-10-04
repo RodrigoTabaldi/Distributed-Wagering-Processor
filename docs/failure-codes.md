@@ -1,48 +1,47 @@
-# Failure Codes — tarefa 17
+# Códigos de falha
 
-Os provedores interpretam códigos estáveis, sem depender do texto da mensagem. O enum `FailureCode` fica em `src/domain/wager-transaction.ts`, com comentários em português explicando cada valor. As strings abaixo são o contrato público; mudar seu significado ou valor exige revisar os consumidores.
+Os provedores interpretam códigos estáveis, sem depender do texto da mensagem. O enum FailureCode fica em src/domain/wager-transaction.ts. Mudar o significado de um código exige revisar os consumidores.
 
 | Código | Significado |
 | --- | --- |
-| `INSUFFICIENT_BALANCE` | A BET exige mais saldo do que a wallet possui. |
-| `REVERSAL_INSUFFICIENT_BALANCE` | ROLLBACK de WIN/REFUND exige retirar um crédito que já foi gasto. |
-| `BALANCE_LIMIT_EXCEEDED` | O crédito ultrapassaria a capacidade monetária de NUMERIC(20,2). |
-| `REFERENCE_NOT_FOUND` | Referência não encontrada; usado na rejeição terminal após esgotar a espera/tentativas na tarefa 18. |
-| `REFERENCE_NOT_PROCESSED` | Origem não está processada; uma origem já rejeitada/falhada não pode justificar a operação dependente. |
-| `INVALID_REFERENCE_KIND` | Tipo da origem não permitido, como REFUND de WIN ou ROLLBACK de LOSS. |
-| `PROVIDER_MISMATCH` | Provedor da origem é incompatível. |
-| `PLAYER_MISMATCH` | Jogador da operação/origem é incompatível. |
-| `WALLET_MISMATCH` | Wallet da operação/origem é incompatível. |
-| `CURRENCY_MISMATCH` | Moeda incompatível com wallet/origem. |
-| `ROUND_MISMATCH` | Origem pertence a outra rodada. |
-| `REFERENCE_AMOUNT_MISMATCH` | Valor de REFUND/ROLLBACK difere do valor integral da origem. |
-| `REFERENCE_ALREADY_REFUNDED` | Já existe outro REFUND processado para a BET. |
-| `REFERENCE_ALREADY_ROLLED_BACK` | Já existe outro ROLLBACK processado para a origem. |
-| `IDEMPOTENCY_CONFLICT` | Chave ou identidade externa reutilizada de forma incompatível. |
-| `PERMANENT_INFRASTRUCTURE_FAILURE` | Falha técnica declarada permanente; código reservado à finalização como FAILED nas etapas de recuperação. |
+| INSUFFICIENT_BALANCE | A BET exige mais saldo do que a wallet possui. |
+| REVERSAL_INSUFFICIENT_BALANCE | ROLLBACK de WIN/REFUND exige retirar um crédito que já foi gasto. |
+| BALANCE_LIMIT_EXCEEDED | O crédito ultrapassaria a capacidade de NUMERIC(20,2). |
+| REFERENCE_NOT_FOUND | Referência não chegou antes de esgotar tentativas ou TTL. |
+| REFERENCE_NOT_PROCESSED | A origem não está processada e não pode justificar a operação dependente. |
+| INVALID_REFERENCE_KIND | Tipo da origem não permitido, como REFUND de WIN. |
+| PROVIDER_MISMATCH | Provedor da origem incompatível. |
+| PLAYER_MISMATCH | Jogador da operação/origem incompatível. |
+| WALLET_MISMATCH | Wallet da operação/origem incompatível. |
+| CURRENCY_MISMATCH | Moeda incompatível com wallet/origem. |
+| ROUND_MISMATCH | Origem pertence a outra rodada. |
+| REFERENCE_AMOUNT_MISMATCH | Reversão difere do valor integral da origem. |
+| REFERENCE_ALREADY_REFUNDED | Outro REFUND já foi processado para a BET. |
+| REFERENCE_ALREADY_ROLLED_BACK | Outro ROLLBACK já foi processado para a origem. |
+| IDEMPOTENCY_CONFLICT | Chave ou identidade externa reutilizada de forma incompatível. |
+| PERMANENT_INFRASTRUCTURE_FAILURE | Falha técnica permanente persistida como FAILED, sem movimento financeiro. |
 
 ## Persistência e resposta
 
-Uma rejeição de negócio chama `WagerTransaction.reject(code)`: estado `REJECTED` e código são persistidos na coluna `wager_transactions.failure_code`, na mesma transação SQL do resultado. Essa rejeição não altera saldo nem produz ledger. HTTP 422 devolve `failureCode`, ID, estado, saldo observado e indicador de replay.
+Rejeição de negócio chama reject(code): estado REJECTED, código, saldo observado e evento são persistidos na mesma transação SQL. Não altera saldo nem produz ledger. HTTP 422 devolve o resultado. Replay mantém o código e saldo originais mesmo depois de outras movimentações.
 
-O mapper recupera o código salvo sem executar novamente a regra de negócio. Reenvios devolvem o mesmo código e saldo observado original, mesmo se outra operação já mudou o saldo da wallet. Transações terminais não são reclassificadas.
-
-`IdempotencyConflictError.code` usa `FailureCode.IdempotencyConflict`. O controller devolve HTTP 409 com `code: "IDEMPOTENCY_CONFLICT"`. É um conflito da requisição recebida: não cria uma nova movimentação nem substitui o failureCode da operação original. Não é uma rejeição financeira da operação já registrada.
-
-Vínculos inválidos com a própria wallet são rejeitados como entrada inválida (HTTP 400 com `code`), antes de registrar uma operação. Incompatibilidades com uma referência existente tornam-se rejeições auditáveis (HTTP 422 com `failureCode`). A FK protege jogador/moeda da wallet no banco. A busca por provedor + ID externo evita resolver uma referência de outro provedor como se fosse do atual; se esse par não existe, aguarda a referência.
+Conflito de idempotência retorna HTTP 409 sem substituir a operação original. Vínculos inválidos com a própria wallet retornam HTTP 400 antes de registrar uma operação; incompatibilidades com uma referência existente tornam-se rejeições auditáveis com HTTP 422. A FK protege jogador/moeda da wallet. Referências são resolvidas por provedor e ID externo.
 
 ## Pendência e infraestrutura
 
-Referência ausente ou origem ainda pendente produz `PENDING_REFERENCE`, HTTP 202, sem failureCode e sem movimento. A ausência inicial não deve virar rejeição definitiva, pois as mensagens podem chegar fora de ordem. O worker da tarefa 18 aplica backoff e limite de tentativas/TTL: referência ausente termina com `REFERENCE_NOT_FOUND`; origem ainda pendente termina com `REFERENCE_NOT_PROCESSED`. Veja [pending-references.md](pending-references.md).
+Referência ausente ou ainda pendente produz PENDING_REFERENCE e HTTP 202, sem código de falha nem movimento. O worker usa backoff, 20 tentativas ou TTL de 30 minutos. Esgotamento termina com REFERENCE_NOT_FOUND ou REFERENCE_NOT_PROCESSED. Veja [pending-references.md](pending-references.md).
 
-Erros técnicos transitórios propagam e causam rollback; a API retorna 503 nos casos reconhecidos. Não são convertidos em `INSUFFICIENT_BALANCE`. A classificação/finalização de falhas permanentes como `FAILED` pertence às etapas de recuperação; nesta tarefa foi verificada somente a persistência do código reservado.
+Falhas transitórias causam rollback e HTTP 503 nos casos reconhecidos. Falhas explicitamente permanentes (PermanentInfrastructureError) ou de schema (PostgreSQL 42P01, 42703, 42883) também desfazem a tentativa financeira. Depois, uma nova transação sob lock da wallet grava FAILED, saldo observado e WagerTransactionFailed. No SQS, a Inbox participa desse commit, antes de enviar à DLQ e confirmar ACK.
 
-Códigos HTTP de transporte/validação, como `INVALID_PAYLOAD`, `INVALID_MONEY`, `INFRASTRUCTURE_UNAVAILABLE` e `INTERNAL_ERROR`, permanecem nas respostas HTTP; não são failureCodes financeiros gravados sobre uma operação original.
+Se a auditoria não puder confirmar, a origem permanece recuperável. Um resultado terminal concorrente nunca é substituído por FAILED. HTTP 502 devolve o resultado técnico terminal; replay mantém estado e saldo originais. Corrigir a infraestrutura não reabre automaticamente uma operação FAILED.
+
+Cinco recebimentos com falha transitória levam a mensagem à DLQ para diagnóstico e redrive. Isso não prova permanência: o banco pode voltar e a operação ainda ser válida. Mensagens malformadas também vão à DLQ sem inventar uma transação financeira. Após corrigir a causa, use a mesma identidade; resultados terminais continuam terminais.
 
 ## Verificação
 
-- `src/domain/failure-codes.spec.ts`: protege as strings públicas, distingue os dois códigos de saldo insuficiente e verifica o código do erro de idempotência.
-- `test/integration/failure-codes.spec.ts`: PostgreSQL e HTTP reais para rejeição, replay, conflito sem alteração do registro original, pendência sem código prematuro e round-trip dos códigos terminais reservados.
-- Os testes de BET, WIN, LOSS, REFUND e ROLLBACK continuam verificando a produção dos códigos em seus cenários de negócio.
+- src/application/errors.spec.ts: diferencia erros transitórios, desconhecidos e permanentes.
+- test/integration/idempotency.spec.ts: falha permanente, replay HTTP 502, conflito 409 e preservação de sucesso concorrente.
+- test/integration/messaging.spec.ts: rollback do débito, FAILED/Inbox/Outbox atômicos, falha de envio à DLQ, redelivery e falha na auditoria.
+- As suites de operações e referências verificam rejeições de negócio e esgotamento de referências.
 
-Execute `bun run test` e `bun run test:integration`. Os testes dos códigos reservados simulam a decisão terminal pelo domínio; não simulam que worker, TTL ou políticas de retry já estejam implementados. Nenhuma migration nova foi necessária: o schema já exige failureCode em REJECTED/FAILED e proíbe esse campo nos demais estados.
+Execute bun run test e bun run test:integration. O schema existente exige código em REJECTED/FAILED e proíbe alteração de estados terminais; nenhuma nova migration foi necessária.

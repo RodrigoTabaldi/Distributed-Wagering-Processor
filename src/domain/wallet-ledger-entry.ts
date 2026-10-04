@@ -52,7 +52,6 @@ export class WalletLedgerEntry {
 
   // Só um novo lançamento precisa passar pelas validações de criação.
   static create(state: LedgerEntryState): WalletLedgerEntry {
-
     for (const id of [state.id, state.walletId, state.transactionId]) {
       if (typeof id !== 'string' || id.trim().length === 0) {
         throw new InvalidLedgerEntryError(

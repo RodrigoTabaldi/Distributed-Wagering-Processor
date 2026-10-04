@@ -6,6 +6,7 @@ import {
 } from '../../application/ports/telemetry.js';
 import { ProcessInboxMessage } from '../../application/process-inbox-message.js';
 import { SubmitWager } from '../../application/submit-wager.js';
+import { isPermanentInfrastructureFailure } from '../../application/errors.js';
 import type { UnitOfWork } from '../../application/ports/repositories.js';
 import type {
   QueueDelivery,
@@ -16,6 +17,7 @@ import { InboxPayloadConflictError } from '../../domain/inbox-message.js';
 import {
   IdempotencyConflictError,
   InvalidWagerTransactionError,
+  WagerTransactionStatus,
 } from '../../domain/wager-transaction.js';
 import { InvalidBetError } from '../../application/process-bet.js';
 import { InvalidWagerRequestError } from '../validation/wager-request.js';
@@ -53,17 +55,22 @@ export class WagerConsumer {
     signal?: AbortSignal,
   ): Promise<'acknowledged' | 'retry' | 'dead-lettered'> {
     let failure: unknown;
+    let failedResult = false;
+    let parsed: ReturnType<typeof parseWagerEnvelope> | undefined;
     const started = performance.now();
     const context: TraceContext = { messageId: delivery.transportMessageId };
     try {
-      const parsed = parseWagerEnvelope(delivery.body, this.providers);
+      parsed = parseWagerEnvelope(delivery.body, this.providers);
+      const request = parsed;
       Object.assign(context, {
         messageId: parsed.messageId,
         correlationId: parsed.messageId,
         walletId: parsed.input.walletId,
         providerId: parsed.input.providerId,
       });
-      await new ProcessInboxMessage(this.unitOfWork).execute(
+      const inboxResult = await new ProcessInboxMessage(
+        this.unitOfWork,
+      ).execute(
         {
           messageId: parsed.messageId,
           consumerName: CONSUMER_NAME,
@@ -74,14 +81,24 @@ export class WagerConsumer {
           // Mesmo SubmitWager do HTTP, com a sessão da Inbox: nenhum commit financeiro independente.
           const result = await new SubmitWager(
             this.unitOfWork,
-          ).executeInTransaction(session, parsed.input, parsed.key, {
-            correlationId: parsed.messageId,
-            causationId: parsed.messageId,
+          ).executeInTransaction(session, request.input, request.key, {
+            correlationId: request.messageId,
+            causationId: request.messageId,
           });
           context.transactionId = result.transactionId;
+          failedResult = result.status === WagerTransactionStatus.Failed;
         },
         signal,
       );
+      if (inboxResult === 'duplicate') {
+        // A Inbox pula o callback no replay. Consultamos o resultado para retomar uma DLQ interrompida.
+        const original = await this.unitOfWork.read(({ wagers }) =>
+          wagers.findByIdempotencyKey(request.key),
+        );
+        if (!original) throw new Error('Processed Inbox has no transaction');
+        context.transactionId = original.id;
+        failedResult = original.status === WagerTransactionStatus.Failed;
+      }
     } catch (error) {
       failure = error;
     } finally {
@@ -93,9 +110,60 @@ export class WagerConsumer {
       return 'retry';
     }
     if (failure === undefined) {
+      // Redelivery após commit de FAILED retoma a DLQ, inclusive se o envio anterior falhou.
+      if (failedResult) {
+        await this.queue.deadLetter(
+          delivery,
+          'PERMANENT_INFRASTRUCTURE_FAILURE',
+        );
+        this.telemetry.record({ type: 'dlq', ...context });
+        await this.queue.acknowledge(delivery);
+        return 'dead-lettered';
+      }
       // Só depois do commit. Falha no ACK deixa a mensagem reaparecer; Inbox preserva o saldo.
       await this.queue.acknowledge(delivery);
       return 'acknowledged';
+    }
+    if (parsed && isPermanentInfrastructureFailure(failure)) {
+      const request = parsed;
+      // Sem o commit de FAILED + Inbox + Outbox, não enviamos nem apagamos a origem.
+      // Se o banco também estiver indisponível, a exceção mantém a mensagem recuperável.
+      const audited = await new ProcessInboxMessage(this.unitOfWork).execute(
+        {
+          messageId: request.messageId,
+          consumerName: CONSUMER_NAME,
+          payloadHash: request.payloadHash,
+          receivedAt: new Date(),
+        },
+        async (session) => {
+          const result = await new SubmitWager(
+            this.unitOfWork,
+          ).failInTransaction(session, request.input, request.key, {
+            correlationId: request.messageId,
+            causationId: request.messageId,
+          });
+          context.transactionId = result.transactionId;
+          failedResult = result.status === WagerTransactionStatus.Failed;
+        },
+        signal,
+      );
+      if (audited === 'duplicate') {
+        const original = await this.unitOfWork.read(({ wagers }) =>
+          wagers.findByIdempotencyKey(request.key),
+        );
+        if (!original) throw new Error('Processed Inbox has no transaction');
+        failedResult = original.status === WagerTransactionStatus.Failed;
+      }
+      // Outro processo pode ter concluído a operação entre o rollback e a recuperação.
+      // Nesse caso respeitamos o resultado vencedor, sem classificá-lo como falha.
+      if (!failedResult) {
+        await this.queue.acknowledge(delivery);
+        return 'acknowledged';
+      }
+      await this.queue.deadLetter(delivery, 'PERMANENT_INFRASTRUCTURE_FAILURE');
+      this.telemetry.record({ type: 'dlq', ...context });
+      await this.queue.acknowledge(delivery);
+      return 'dead-lettered';
     }
     const permanent =
       failure instanceof InvalidWagerEnvelopeError ||

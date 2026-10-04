@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-04T20:13:12.536Z",
+  "timestamp": "2026-10-04T19:49:39.190Z",
   "environment": {
     "bun": "1.4.2",
     "os": "win32 10.0.26200",
@@ -28,11 +28,11 @@
       "scenario": "different-wallets",
       "requests": 100,
       "concurrency": 8,
-      "seconds": 0.9400509000000001,
-      "successfulRequestsPerSecond": 106.37721851018917,
-      "p50Ms": 71.14380000000028,
-      "p95Ms": 100.43859999999995,
-      "p99Ms": 102.92679999999996,
+      "seconds": 0.8596448999999998,
+      "successfulRequestsPerSecond": 116.32710203945841,
+      "p50Ms": 58.57109999999966,
+      "p95Ms": 112.52350000000001,
+      "p99Ms": 150.11570000000006,
       "failures": 0,
       "errorRate": 0
     },
@@ -40,11 +40,11 @@
       "scenario": "same-wallet",
       "requests": 100,
       "concurrency": 8,
-      "seconds": 1.8085924000000004,
-      "successfulRequestsPerSecond": 55.291617945535975,
-      "p50Ms": 160.07569999999987,
-      "p95Ms": 244.51379999999972,
-      "p99Ms": 284.40089999999964,
+      "seconds": 1.8943709000000004,
+      "successfulRequestsPerSecond": 52.78797304160446,
+      "p50Ms": 109.22019999999975,
+      "p95Ms": 251.9025999999999,
+      "p99Ms": 258.41690000000017,
       "failures": 0,
       "errorRate": 0
     },
@@ -52,11 +52,11 @@
       "scenario": "duplicate-burst",
       "requests": 50,
       "concurrency": 8,
-      "seconds": 0.11165660000000026,
-      "successfulRequestsPerSecond": 447.8015630065745,
-      "p50Ms": 12.725300000000061,
-      "p95Ms": 55.12039999999979,
-      "p99Ms": 72.2494999999999,
+      "seconds": 0.11540399999999953,
+      "successfulRequestsPerSecond": 433.2605455616807,
+      "p50Ms": 9.217800000000352,
+      "p95Ms": 65.88770000000022,
+      "p99Ms": 109.47650000000067,
       "failures": 0,
       "errorRate": 0
     }
@@ -67,10 +67,10 @@
   "connectionPool": {
     "maxBusyConnections": 8,
     "maxWaitingRequests": 1,
-    "averageBusyConnections": 3.212707182320442,
-    "samples": 724
+    "averageBusyConnections": 3.600297176820208,
+    "samples": 673
   },
-  "maxObservedOutboxLagSeconds": 5.003111,
+  "maxObservedOutboxLagSeconds": 4.483116,
   "finalOutboxLagSeconds": 0,
   "unpublishedEvents": 0,
   "invariant": "All wallets non-negative and balance = SUM(CREDIT) - SUM(DEBIT); each BET has one DEBIT"

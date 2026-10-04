@@ -50,7 +50,19 @@ process.on(
   }) => {
     try {
       const transport = new SqsTransport(client, urls, 0);
-      if (command.action === 'before-ack') {
+      if (
+        ['before-outbox-send', 'after-outbox-send'].includes(command.action)
+      ) {
+        await new PublishOutbox(uow, {
+          publish: async (message) => {
+            if (command.action === 'after-outbox-send')
+              await transport.publish(message);
+            process.send?.({ phase: 'outbox-claimed', eventId: message.id });
+            // A reserva já está commitada. O pai mata este processo antes da confirmação SQL.
+            await new Promise<void>(() => {});
+          },
+        }).runOne();
+      } else if (command.action === 'before-ack') {
         class HeldAck extends SqsTransport {
           override async acknowledge(
             delivery: Parameters<SqsTransport['acknowledge']>[0],

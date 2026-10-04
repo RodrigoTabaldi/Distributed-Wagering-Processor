@@ -7,7 +7,7 @@ export interface MoneyProps {
   currency: string;
 }
 
-// Identifica um valor ou formato  de moeda inválido.
+// Identifica um valor ou formato de moeda inválido.
 export class InvalidMoneyError extends Error {
   constructor(message: string) {
     super(message);
@@ -25,7 +25,8 @@ export class CurrencyMismatchError extends Error {
   }
 }
 
-// Cria uma configuração decimal exclusiva de Money, sem alterar a biblioteca global.
+// NUMERIC(20,2) comporta 20 dígitos; usamos 21 para detectar overflow sem perder centavos.
+// A configuração isolada não muda o comportamento de outros usos de decimal.js.
 
 const MoneyDecimal = Decimal.clone({ precision: 21 });
 
@@ -35,17 +36,16 @@ const maximumAmount = new MoneyDecimal('999999999999999999.99');
 // Obtém os códigos de moeda reconhecidos pelo runtime, como BRL, USD e EUR.
 const supportedCurrencies = new Set(Intl.supportedValuesOf('currency'));
 
-//  Representa dinheiro e concentra suas regras, sem depender do NestJS.
+// Representa dinheiro e concentra suas regras, sem depender do NestJS.
 export class Money {
   readonly #value: Decimal;
 
-  //  torna o valor privado também em execução , a moeda pode ser consultada, mas não deve ser alterada após a criação. 
+  // A moeda é pública para consulta; Object.freeze impede sua alteração em execução.
   public readonly currency: string;
 
   // O construtor privado obriga a criação pelos métodos da classe.
   // Também valida resultados internos, para impedir que operações excedam o limite.
   private constructor(value: Decimal, currency: string) {
-
     // abs() verifica a magnitude: o limite vale tanto para positivos quanto negativos.
     if (value.abs().greaterThan(maximumAmount)) {
       throw new InvalidMoneyError('Amount exceeds NUMERIC(20,2) capacity');
@@ -61,17 +61,12 @@ export class Money {
   // Factory de entrada valida os dados antes de criar Money.
   // Valores negativos são proibidos aqui, mas podem resultar de cálculos internos.
   static from(props: MoneyProps): Money {
-
     if (
-
       // Verificações em execução também protegem contra dados externos fora dos tipos TS.
       !props ||
       typeof props.amount !== 'string' ||
-
-
       // Rejeita espaços e quebras de linha, sem corrigir a entrada silenciosamente.
       props.amount.trim() !== props.amount ||
-
       // Exige de 1 a 18 dígitos inteiros, ponto e exatamente 2 casas decimais.
       !/^[0-9]{1,18}\.[0-9]{2}$/.test(props.amount)
     ) {

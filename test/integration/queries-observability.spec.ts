@@ -80,6 +80,7 @@ describe('Consultas, reconciliação e observabilidade com PostgreSQL e SQS reai
       '409',
       '422',
       '500',
+      '502',
       '503',
     ]);
     expect(

@@ -10,6 +10,7 @@ import {
   WagerTransactionProcessed,
   WagerTransactionRejected,
   WagerTransactionPendingReference,
+  WagerTransactionFailed,
   WalletBalanceChanged,
   type WagerEventData,
 } from '../domain/wager-events.js';
@@ -68,7 +69,9 @@ export async function enqueueWagerEvents(
         ? new WagerTransactionRejected(props)
         : tx.status === Status.PendingReference
           ? new WagerTransactionPendingReference(props)
-          : undefined;
+          : tx.status === Status.Failed
+            ? new WagerTransactionFailed(props)
+            : undefined;
   if (event) await session.outbox.create(OutboxMessage.enqueue(event));
   // LOSS, valor zero, rejeição e pendência não têm ledger: não geram alteração de saldo.
   const entry =
@@ -76,6 +79,9 @@ export async function enqueueWagerEvents(
       ? await session.ledger.findByTransaction(tx.walletId, tx.id)
       : undefined;
   if (entry && !entry.balanceBefore.equals(entry.balanceAfter)) {
+    // A versão identifica esta mudança mesmo quando publishers entregam eventos fora de ordem.
+    const wallet = await session.wallets.findByIdForUpdate(tx.walletId);
+    if (!wallet) throw new Error('Event wallet disappeared');
     await session.outbox.create(
       OutboxMessage.enqueue(
         new WalletBalanceChanged({
@@ -87,6 +93,9 @@ export async function enqueueWagerEvents(
             walletId: tx.walletId,
             balanceBefore: entry.balanceBefore.toJSON(),
             balanceAfter: entry.balanceAfter.toJSON(),
+            direction: entry.direction,
+            money: entry.money.toJSON(),
+            walletVersion: wallet.version,
           },
         }),
       ),

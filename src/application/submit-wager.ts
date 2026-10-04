@@ -5,6 +5,7 @@ import {
   WagerTransaction,
   WagerTransactionKind,
   WagerTransactionStatus,
+  FailureCode,
 } from '../domain/wager-transaction.js';
 import { InvalidBetError, ProcessBet } from './process-bet.js';
 import { ProcessWin, type ProcessWinResult } from './process-win.js';
@@ -12,6 +13,8 @@ import { ProcessLoss } from './process-loss.js';
 import { ProcessRefund } from './process-refund.js';
 import { ProcessRollback } from './process-rollback.js';
 import type { RepositorySession, UnitOfWork } from './ports/repositories.js';
+import { persistWagerOutcome } from './persist-wager-outcome.js';
+import { isPermanentInfrastructureFailure } from './errors.js';
 
 export interface WagerEventContext {
   correlationId: string;
@@ -33,7 +36,8 @@ export interface SubmitWagerInput {
   money: MoneyProps;
   referenceExternalTransactionId?: string;
 }
-export interface SubmitWagerResult extends ProcessWinResult {
+export interface SubmitWagerResult extends Omit<ProcessWinResult, 'status'> {
+  status: ProcessWinResult['status'] | WagerTransactionStatus.Failed;
   idempotentReplay: boolean;
 }
 
@@ -75,6 +79,10 @@ export class SubmitWager {
         this.process(session, tx, payload, key, hash),
       );
     } catch (error) {
+      if (isPermanentInfrastructureFailure(error))
+        return this.unitOfWork.transaction((session) =>
+          this.failInTransaction(session, input, key, context),
+        );
       // Chaves iguais podem disputar wallets diferentes. UNIQUE é a arbitragem final no banco.
       // Após 23505, a transação está abortada: consulta o vencedor em uma NOVA transação.
       if (!this.isIdentityRace(error)) throw error;
@@ -95,6 +103,50 @@ export class SubmitWager {
   ): Promise<SubmitWagerResult> {
     const { tx, payload, hash } = this.prepare(input, key, context);
     return this.process(session, tx, payload, key, hash);
+  }
+
+  // Executado em uma nova transação, depois que a tentativa financeira foi desfeita.
+  // O lock e a identidade persistida impedem que a recuperação substitua um sucesso concorrente.
+  async failInTransaction(
+    session: RepositorySession,
+    input: SubmitWagerInput,
+    key: string,
+    context?: WagerEventContext,
+  ): Promise<SubmitWagerResult> {
+    const prepared = this.prepare(input, key, context);
+    const wallet = await session.wallets.findByIdForUpdate(
+      prepared.tx.walletId,
+    );
+    if (!wallet) throw new InvalidBetError('WALLET_NOT_FOUND');
+    if (wallet.playerId !== prepared.tx.playerId)
+      throw new InvalidBetError('PLAYER_MISMATCH');
+    if (wallet.currency !== prepared.tx.money.currency)
+      throw new InvalidBetError('CURRENCY_MISMATCH');
+    const existing = await this.existing(session, key, prepared.payload);
+    if (existing) {
+      if (existing.idempotencyKey !== key) throw new IdempotencyConflictError();
+      existing.assertMatchesPayload(prepared.hash);
+      if (existing.isTerminal())
+        return this.replay(session, existing, key, prepared.hash);
+    }
+    const tx = existing ?? prepared.tx;
+    if (!existing) await session.wagers.create(tx);
+    const expected = tx.status;
+    tx.fail(FailureCode.PermanentInfrastructureFailure);
+    await persistWagerOutcome(
+      session,
+      tx,
+      expected,
+      new Date(),
+      wallet.balance,
+    );
+    return {
+      transactionId: tx.id,
+      status: WagerTransactionStatus.Failed,
+      balance: wallet.balance.toJSON(),
+      failureCode: tx.failureCode,
+      idempotentReplay: false,
+    };
   }
   private prepare(
     input: SubmitWagerInput,
@@ -213,6 +265,7 @@ export class SubmitWager {
     if (
       tx.status !== WagerTransactionStatus.Processed &&
       tx.status !== WagerTransactionStatus.Rejected &&
+      tx.status !== WagerTransactionStatus.Failed &&
       tx.status !== WagerTransactionStatus.PendingReference
     )
       throw new StoredResultUnavailableError();

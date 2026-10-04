@@ -1,8 +1,9 @@
-import { persistWagerOutcome } from './persist-wager-outcome.js';
+import {
+  lockWagerForProcessing,
+  finishProcessedWager,
+} from './wager-processing.js';
 import type { MoneyProps } from '../domain/money.js';
 import {
-  FailureCode,
-  InvalidTransactionStateError,
   WagerTransactionKind,
   WagerTransactionStatus,
 } from '../domain/wager-transaction.js';
@@ -35,42 +36,13 @@ export class ProcessLoss {
     session: RepositorySession,
     transactionId: string,
   ): Promise<ProcessLossResult> {
-    const { wallets, wagers } = session;
-    const initial = await wagers.findById(transactionId);
-    if (!initial) throw new InvalidLossError('TRANSACTION_NOT_FOUND');
-    if (initial.kind !== WagerTransactionKind.Loss)
-      throw new InvalidLossError('INVALID_TRANSACTION_KIND');
-
-    // O lock torna o saldo observado consistente com as BETs/WINs da mesma wallet.
-    // Ele não altera a wallet e não bloqueia wallets diferentes.
-    const wallet = await wallets.findByIdForUpdate(initial.walletId);
-    if (!wallet) throw new InvalidLossError('WALLET_NOT_FOUND');
-    const tx = await wagers.findById(transactionId);
-    if (!tx) throw new InvalidLossError('TRANSACTION_NOT_FOUND');
-    if (tx.status !== WagerTransactionStatus.Pending)
-      throw new InvalidTransactionStateError(tx.status);
-    if (tx.walletId !== wallet.id)
-      throw new InvalidLossError(FailureCode.WalletMismatch);
-    if (tx.playerId !== wallet.playerId)
-      throw new InvalidLossError(FailureCode.PlayerMismatch);
-    if (tx.money.currency !== wallet.currency)
-      throw new InvalidLossError(FailureCode.CurrencyMismatch);
-
-    const at = new Date();
-    tx.markProcessed(undefined, at);
-    // Grava somente o resultado e o saldo observado para replay; não chama debit, credit ou save.
-    // Mesmo que o payload tenha valor positivo, LOSS não representa movimentação financeira.
-    await persistWagerOutcome(
+    const context = await lockWagerForProcessing(
       session,
-      tx,
-      WagerTransactionStatus.Pending,
-      at,
-      wallet.balance,
+      transactionId,
+      WagerTransactionKind.Loss,
+      InvalidLossError,
     );
-    return {
-      transactionId: tx.id,
-      status: WagerTransactionStatus.Processed,
-      balance: wallet.balance.toJSON(),
-    };
+    // LOSS confirma somente o resultado; a BET já registrou o débito.
+    return finishProcessedWager(session, context);
   }
 }

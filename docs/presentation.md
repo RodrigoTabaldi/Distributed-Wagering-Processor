@@ -67,3 +67,20 @@ Comece: “Dinheiro usa Decimal e NUMERIC. Cada alteração trava sua wallet e c
 8. Explique limites: sem auth, eventos ao menos uma vez, carga local, sem partidas dobradas.
 
 Para cada escolha responda: qual problema, por que esta solução, o que aconteceria sem ela, qual custo e qual teste comprova. O roteiro prepara a apresentação; dominar a explicação é sua etapa de estudo.
+
+## Decisões para explicar na apresentação
+
+- FAILED significa falha técnica permanente demonstrada; cinco retries não provam permanência. HTTP 502 comunica resultado terminal, enquanto 503 permite retry com a mesma chave.
+- Auditoria da falha ocorre depois do rollback financeiro, em nova transação. Inbox e Outbox entram juntas nesse commit; falha no commit deixa a origem recuperável.
+- Uma falha de envio à DLQ não pode virar ACK na redelivery: a Inbox pula o callback e o consumer consulta o resultado original para retomar o envio.
+- walletVersion identifica a mudança de saldo; FIFO e publishers concorrentes não substituem deduplicação e tratamento de eventos antigos no consumidor.
+- O teste com histórico maior mede o custo da soma do ledger e uma publicação SQS mais lenta. Uma experiência local curta não prova capacidade de produção.
+
+## Explicar a Outbox com lease
+
+1. Reservar com token e prazo no banco; confirmar o commit.
+2. Enviar ao SQS sem manter conexão SQL ocupada.
+3. Confirmar publicação somente se token e prazo ainda forem válidos.
+4. Em crash, esperar o prazo vencer para outra instância retomar o mesmo eventId.
+
+O token impede escrita por um dono antigo, mas não desfaz uma mensagem que já chegou ao broker. Por isso a garantia continua sendo entrega ao menos uma vez, com deduplicação pelo consumidor. O teste com pool de uma conexão mostra que uma consulta continua atendida enquanto o envio está bloqueado. Os processadores compartilham as etapas transacionais, mantendo suas regras financeiras legíveis.

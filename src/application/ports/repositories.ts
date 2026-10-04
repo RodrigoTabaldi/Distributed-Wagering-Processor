@@ -74,9 +74,14 @@ export interface RepositorySession {
 export interface OutboxRepository {
   create(message: OutboxMessage): Promise<void>;
   findById(id: string): Promise<OutboxMessage | undefined>;
-  // Seleciona um evento confirmado e devido; SKIP LOCKED permite publishers independentes.
-  lockNextDue(now: Date): Promise<OutboxMessage | undefined>;
-  save(message: OutboxMessage, expectedAttempts: number): Promise<void>;
+  // Reserva curta e persistente: o commit libera a conexão antes do envio ao broker.
+  claimNextDue(
+    now: Date,
+    token: string,
+    leaseMs: number,
+  ): Promise<OutboxMessage | undefined>;
+  // Token e validade da reserva impedem um publisher antigo de sobrescrever o novo dono.
+  saveClaimed(message: OutboxMessage, token: string): Promise<boolean>;
 }
 
 export interface InboxRepository {

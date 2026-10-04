@@ -33,7 +33,7 @@ bun run build
 
 Os testes de integração usam exclusivamente `dwp_test`, criado no primeiro startup do volume pelo script `docker/postgres/init-test-database.sql`. Se o volume já existir sem esse banco, crie `dwp_test` manualmente; não remova um volume com dados para executar testes. As migrations de rollback são testadas em um schema descartável dentro desse banco. Cada teste usa identificadores próprios; o banco de desenvolvimento não é apagado.
 
-`bun run db:rollback` **remove as três tabelas financeiras e seus dados** ao reverter a migration inicial. Use apenas em um banco descartável. O startup da aplicação nunca executa migrations automaticamente.
+`bun run db:rollback` pode remover tabelas e dados ao reverter migrations financeiras. Use apenas em banco descartável ou rollback explicitamente planejado. A migration 005 remove somente metadados de leases e exige publishers parados; não remove eventos. O startup da aplicação nunca executa migrations automaticamente.
 
 ## Organização
 
@@ -67,7 +67,7 @@ Use `unitOfWork.transaction(async ({ wallets, wagers, ledger }) => { ... })` par
 
 ## Limites destas etapas
 
-Ainda não há endpoints financeiros, Inbox, Outbox, consumer SQS ou workers. As constraints de unicidade são a base da idempotência; o replay e a resolução de disputas serão implementados na aplicação. O lock por wallet foi testado em sessões independentes; o fluxo financeiro completo ainda deverá ser validado com múltiplos processos.
+Endpoints financeiros, Inbox, Outbox e workers estão implementados. Replay e disputas usam identidade persistida e locks por wallet; integração verifica três processos independentes. A migration 005 reserva publicação por token e lease, liberando a conexão SQL durante o envio SQS. README e o documento 03 de arquitetura descrevem o estado atual.
 
 A reconciliação no commit soma todo o ledger da wallet e usa bloqueio somente dessa wallet. É uma escolha conservadora de correção para o desafio, com custo crescente conforme o histórico aumenta; desempenho de hot wallets deverá ser medido posteriormente. O índice `(wallet_id, created_at, id)` prepara a leitura por cursor. O campo `observed_balance` reserva a persistência do saldo da resposta original, inclusive em operações sem ledger; a aplicação ainda deverá preenchê-lo e utilizá-lo no replay.
 

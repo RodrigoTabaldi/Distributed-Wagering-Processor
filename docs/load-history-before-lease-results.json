@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-04T20:13:12.536Z",
+  "timestamp": "2026-10-04T19:48:37.810Z",
   "environment": {
     "bun": "1.4.2",
     "os": "win32 10.0.26200",
@@ -18,9 +18,9 @@
     "percentile": "nearest-rank",
     "transport": "HTTP over loopback; real PostgreSQL and SQS",
     "latencyIncludesResponseBody": true,
-    "historyEntries": 0,
-    "artificialSqsDelayMs": 0,
-    "drainTimeoutMs": 60000,
+    "historyEntries": 500,
+    "artificialSqsDelayMs": 25,
+    "drainTimeoutMs": 120000,
     "poolSampleIntervalMs": 10
   },
   "scenarios": [
@@ -28,11 +28,11 @@
       "scenario": "different-wallets",
       "requests": 100,
       "concurrency": 8,
-      "seconds": 0.9400509000000001,
-      "successfulRequestsPerSecond": 106.37721851018917,
-      "p50Ms": 71.14380000000028,
-      "p95Ms": 100.43859999999995,
-      "p99Ms": 102.92679999999996,
+      "seconds": 0.6260528000000013,
+      "successfulRequestsPerSecond": 159.73093643219835,
+      "p50Ms": 47.96770000000106,
+      "p95Ms": 64.95499999999993,
+      "p99Ms": 69.5580000000009,
       "failures": 0,
       "errorRate": 0
     },
@@ -40,11 +40,11 @@
       "scenario": "same-wallet",
       "requests": 100,
       "concurrency": 8,
-      "seconds": 1.8085924000000004,
-      "successfulRequestsPerSecond": 55.291617945535975,
-      "p50Ms": 160.07569999999987,
-      "p95Ms": 244.51379999999972,
-      "p99Ms": 284.40089999999964,
+      "seconds": 1.5994722999999995,
+      "successfulRequestsPerSecond": 62.520620082010815,
+      "p50Ms": 136.3150999999998,
+      "p95Ms": 154.66599999999926,
+      "p99Ms": 158.1960999999992,
       "failures": 0,
       "errorRate": 0
     },
@@ -52,11 +52,11 @@
       "scenario": "duplicate-burst",
       "requests": 50,
       "concurrency": 8,
-      "seconds": 0.11165660000000026,
-      "successfulRequestsPerSecond": 447.8015630065745,
-      "p50Ms": 12.725300000000061,
-      "p95Ms": 55.12039999999979,
-      "p99Ms": 72.2494999999999,
+      "seconds": 0.10170809999999983,
+      "successfulRequestsPerSecond": 491.60293034674805,
+      "p50Ms": 11.451399999999921,
+      "p95Ms": 49.08470000000125,
+      "p99Ms": 65.02880000000005,
       "failures": 0,
       "errorRate": 0
     }
@@ -67,10 +67,10 @@
   "connectionPool": {
     "maxBusyConnections": 8,
     "maxWaitingRequests": 1,
-    "averageBusyConnections": 3.212707182320442,
-    "samples": 724
+    "averageBusyConnections": 1.4652591170825335,
+    "samples": 5210
   },
-  "maxObservedOutboxLagSeconds": 5.003111,
+  "maxObservedOutboxLagSeconds": 43.594393,
   "finalOutboxLagSeconds": 0,
   "unpublishedEvents": 0,
   "invariant": "All wallets non-negative and balance = SUM(CREDIT) - SUM(DEBIT); each BET has one DEBIT"

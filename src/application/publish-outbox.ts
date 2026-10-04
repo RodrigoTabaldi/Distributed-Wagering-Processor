@@ -1,5 +1,9 @@
 import type { UnitOfWork } from './ports/repositories.js';
 import type { EventPublisher } from './ports/messaging.js';
+import { randomUUID } from 'node:crypto';
+
+// Cobre os dois attempts do SDK (até 25 s cada) com margem. Crash é recuperado após esse prazo.
+export const OUTBOX_LEASE_MS = 90000;
 
 export class PublishOutbox {
   constructor(
@@ -9,29 +13,35 @@ export class PublishOutbox {
   async runOne(
     now = new Date(),
     signal?: AbortSignal,
-  ): Promise<'idle' | 'published' | 'rescheduled'> {
+  ): Promise<'idle' | 'published' | 'rescheduled' | 'superseded'> {
+    const token = randomUUID();
+    const message = await this.unitOfWork.transaction(
+      ({ outbox }) => outbox.claimNextDue(now, token, OUTBOX_LEASE_MS),
+      signal,
+    );
+    if (!message) return 'idle';
+    let outcome: 'published' | 'rescheduled';
+    try {
+      // A reserva já foi confirmada: nenhum lock ou conexão SQL fica aberto durante a rede.
+      await this.publisher.publish(message, signal);
+      message.markPublished(new Date());
+      outcome = 'published';
+    } catch {
+      message.scheduleRetry(new Date(Math.max(now.getTime(), Date.now())));
+      outcome = 'rescheduled';
+    }
     return this.unitOfWork.transaction(async (session) => {
-      const { outbox } = session;
-      const message = await outbox.lockNextDue(now);
-      if (!message) return 'idle';
-      const attempts = message.attempts;
-      try {
-        // Somente eventos já confirmados são visíveis a esta transação independente.
-        await this.publisher.publish(message, signal);
-      } catch {
-        message.scheduleRetry(now);
-        await outbox.save(message, attempts);
+      if (!(await session.outbox.saveClaimed(message, token)))
+        return 'superseded';
+      if (outcome === 'rescheduled') {
         session.recordAfterCommit?.({
           type: 'retry',
           source: 'outbox',
           correlationId: message.payload.correlationId as string,
         });
-        return 'rescheduled';
       }
-      // Falha depois do envio causa rollback: repetiremos o MESMO eventId. Entrega é ao menos uma vez.
-      message.markPublished(new Date());
-      await outbox.save(message, attempts);
-      return 'published';
+      // Se este commit falhar, o lease expira e o mesmo eventId volta a ser enviado.
+      return outcome;
     }, signal);
   }
 }

@@ -121,6 +121,10 @@ export const openApi = {
           ),
           '409': response('Chave/identidade reutilizada com payload diferente'),
           '422': response('Rejeição financeira persistida', ref('WagerResult')),
+          '502': response(
+            'Falha técnica terminal persistida; não repetir a operação',
+            ref('WagerResult'),
+          ),
           ...failure,
         },
       },
@@ -263,7 +267,7 @@ export const openApi = {
           transactionId: uuid,
           status: {
             type: 'string',
-            enum: ['PROCESSED', 'REJECTED', 'PENDING_REFERENCE'],
+            enum: ['PROCESSED', 'REJECTED', 'PENDING_REFERENCE', 'FAILED'],
           },
           balance: money,
           failureCode: { type: 'string' },

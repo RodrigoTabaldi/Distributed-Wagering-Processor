@@ -32,6 +32,21 @@ import { assertFinancialConsistency } from './helpers/financial-consistency.js';
 // Carga real HTTP → aplicação → PostgreSQL → Outbox → SQS. Nunca grava nas wallets de desenvolvimento.
 const count = Number(process.env.LOAD_REQUESTS ?? '100');
 const concurrency = Number(process.env.LOAD_CONCURRENCY ?? '8');
+const historyEntries = Number(process.env.LOAD_HISTORY_ENTRIES ?? '0');
+const publishDelayMs = Number(process.env.LOAD_SQS_DELAY_MS ?? '0');
+const drainTimeoutMs = Number(process.env.LOAD_DRAIN_TIMEOUT_MS ?? '60000');
+if (
+  !Number.isInteger(historyEntries) ||
+  historyEntries < 0 ||
+  historyEntries > 5000 ||
+  !Number.isInteger(publishDelayMs) ||
+  publishDelayMs < 0 ||
+  publishDelayMs > 1000 ||
+  !Number.isInteger(drainTimeoutMs) ||
+  drainTimeoutMs < 1000 ||
+  drainTimeoutMs > 300000
+)
+  throw new Error('Invalid load history, SQS delay or drain timeout');
 if (
   !Number.isInteger(count) ||
   count < 1 ||
@@ -53,6 +68,11 @@ let publisherTask: Promise<void> | undefined;
 let maxLag = 0;
 let finalLag = 0;
 let publisherFailure: unknown;
+let poolSampler: ReturnType<typeof setInterval> | undefined;
+let poolSamples = 0;
+let busyConnectionSamples = 0;
+let maxBusyConnections = 0;
+let maxWaitingRequests = 0;
 const records: object[] = [];
 
 try {
@@ -129,10 +149,22 @@ try {
     )
       throw new Error('Warmup failed');
   }
-  const publisher = new PublishOutbox(
-    module.get<UnitOfWork>(UNIT_OF_WORK),
-    new SqsTransport(client, urls),
-  );
+  const publisher = new PublishOutbox(module.get<UnitOfWork>(UNIT_OF_WORK), {
+    publish: async (message, signal) => {
+      // Atraso controlado antes do envio real simula rede lenta sem substituir o SQS.
+      if (publishDelayMs) await delay(publishDelayMs, undefined, { signal });
+      await new SqsTransport(client, urls!).publish(message, signal);
+    },
+  });
+  const pool = await orm.em.getConnection().getNativeClient();
+  poolSampler = setInterval(() => {
+    // Consultar o pool local não executa SQL nem disputa uma conexão com o experimento.
+    const busy = pool.totalCount - pool.idleCount;
+    poolSamples++;
+    busyConnectionSamples += busy;
+    maxBusyConnections = Math.max(maxBusyConnections, busy);
+    maxWaitingRequests = Math.max(maxWaitingRequests, pool.waitingCount);
+  }, 10);
   const sampleLag = async () => {
     const [row] = await orm!.em
       .fork()
@@ -155,6 +187,15 @@ try {
   })();
   let processed = 0;
   let duplicates = 0;
+  // Histórico na wallet disputada exercita o custo crescente das constraints que somam o ledger.
+  // Preparação fica fora da latência medida, mas participa da auditoria financeira final.
+  for (let i = 0; i < historyEntries; i++) {
+    if (
+      (await post('/wagering/transactions', bet(0), crypto.randomUUID()))
+        .status !== 200
+    )
+      throw new Error('History fixture failed');
+  }
   for (const scenario of [
     'different-wallets',
     'same-wallet',
@@ -212,7 +253,7 @@ try {
     });
   }
   // Drenagem tem prazo: backlog não é escondido por um publisher simulado ou por espera infinita.
-  const deadline = Date.now() + 60000;
+  const deadline = Date.now() + drainTimeoutMs;
   let pending = 0;
   do {
     const [row] = await orm.em
@@ -237,7 +278,7 @@ try {
   if (
     processed !== count * 2 + 1 ||
     duplicates !== 49 ||
-    effect!.bets !== String(processed + 20) ||
+    effect!.bets !== String(processed + 20 + historyEntries) ||
     effect!.debits !== effect!.bets ||
     pending !== 0
   )
@@ -273,11 +314,23 @@ try {
       percentile: 'nearest-rank',
       transport: 'HTTP over loopback; real PostgreSQL and SQS',
       latencyIncludesResponseBody: true,
+      historyEntries,
+      artificialSqsDelayMs: publishDelayMs,
+      drainTimeoutMs,
+      poolSampleIntervalMs: 10,
     },
     scenarios: records,
     uniqueProcessedDuringMeasurement: processed,
     duplicateReplays: duplicates,
     lockConflicts: conflicts,
+    connectionPool: {
+      maxBusyConnections,
+      maxWaitingRequests,
+      averageBusyConnections: poolSamples
+        ? busyConnectionSamples / poolSamples
+        : 0,
+      samples: poolSamples,
+    },
     maxObservedOutboxLagSeconds: maxLag,
     finalOutboxLagSeconds: finalLag,
     unpublishedEvents: pending,
@@ -286,13 +339,16 @@ try {
   };
   await mkdir('docs', { recursive: true });
   await writeFile(
-    'docs/load-results.json',
+    historyEntries || publishDelayMs
+      ? 'docs/load-history-results.json'
+      : 'docs/load-results.json',
     `${JSON.stringify(report, null, 2)}\n`,
   );
   console.log(JSON.stringify(report, null, 2));
 } finally {
   // Limpeza limitada aos nomes gerados por esta execução; RESTRICT impede remoção em cascata.
   running = false;
+  clearInterval(poolSampler);
   await publisherTask;
   try {
     if (urls)

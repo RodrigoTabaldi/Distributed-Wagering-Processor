@@ -9,6 +9,7 @@ import {
   type SubmitWagerInput,
 } from '../../src/application/submit-wager.js';
 import type { UnitOfWork } from '../../src/application/ports/repositories.js';
+import { PermanentInfrastructureError } from '../../src/application/errors.js';
 import { WagerTransactionKind } from '../../src/domain/wager-transaction.js';
 import { IdempotencyConflictError } from '../../src/domain/wager-transaction.js';
 import { WagerModule } from '../../src/interfaces/http/wager.module.js';
@@ -56,6 +57,72 @@ async function financialState(walletId: string) {
 }
 
 describe('Persistent BET idempotency through HTTP', () => {
+  it('persists a permanent failure and exposes stable HTTP 502 replays without debit', async () => {
+    const input = await seed();
+    const key = crypto.randomUUID();
+    let failOnce = true;
+    const failing: UnitOfWork = {
+      read: (operation) => uow.read(operation),
+      transaction: (operation, signal) =>
+        uow.transaction(
+          (session) =>
+            operation({
+              ...session,
+              outbox: new Proxy(session.outbox, {
+                get(target, property) {
+                  if (property === 'create')
+                    return async (
+                      ...args: Parameters<typeof target.create>
+                    ) => {
+                      if (failOnce) {
+                        failOnce = false;
+                        throw new PermanentInfrastructureError();
+                      }
+                      return target.create(...args);
+                    };
+                  const value = Reflect.get(target, property);
+                  return typeof value === 'function'
+                    ? value.bind(target)
+                    : value;
+                },
+              }),
+            }),
+          signal,
+        ),
+    };
+    const result = await new SubmitWager(failing).execute(input, key);
+    expect(result).toMatchObject({
+      status: 'FAILED',
+      idempotentReplay: false,
+      failureCode: 'PERMANENT_INFRASTRUCTURE_FAILURE',
+    });
+    const replay = await post(input, key).expect(502);
+    expect(replay.body).toEqual({ ...result, idempotentReplay: true });
+    expect(await financialState(input.walletId)).toMatchObject({
+      balance: '100.00',
+      debits: '0',
+      reconstructed: '100.00',
+    });
+    await post(
+      { ...input, money: { amount: '26.00', currency: 'BRL' } },
+      key,
+    ).expect(409);
+    // Uma decisão terminal concorrente prevalece: recuperação nunca substitui PROCESSED por FAILED.
+    const processedInput = await seed();
+    const processedKey = crypto.randomUUID();
+    const processed = await new SubmitWager(uow).execute(
+      processedInput,
+      processedKey,
+    );
+    const preserved = await uow.transaction((session) =>
+      new SubmitWager(uow).failInTransaction(
+        session,
+        processedInput,
+        processedKey,
+      ),
+    );
+    expect(preserved).toEqual({ ...processed, idempotentReplay: true });
+  });
   it('arbitrates a forced UNIQUE race across wallets after rolling back the loser', async () => {
     const a = await seed();
     const b = await seed();

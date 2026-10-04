@@ -132,6 +132,8 @@ export interface OutboxMessageRecord {
   attempts: number;
   nextAttemptAt?: Date;
   publishedAt?: Date;
+  claimToken?: string;
+  leaseExpiresAt?: Date;
 }
 export const OutboxMessageEntity = new EntitySchema<OutboxMessageRecord>({
   name: 'OutboxMessageRecord',
@@ -145,6 +147,8 @@ export const OutboxMessageEntity = new EntitySchema<OutboxMessageRecord>({
     attempts: { type: 'integer', default: 0 },
     nextAttemptAt: { ...timestampColumn(), nullable: true },
     publishedAt: { ...timestampColumn(), nullable: true },
+    claimToken: { type: 'uuid', nullable: true },
+    leaseExpiresAt: { ...timestampColumn(), nullable: true },
   },
 });
 export const LedgerEntryEntity = new EntitySchema<LedgerEntryRecord>({
