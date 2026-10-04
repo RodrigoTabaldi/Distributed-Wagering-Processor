@@ -48,7 +48,7 @@ export class WagerController {
     } catch (error) {
       if (error instanceof IdempotencyConflictError)
         throw new ConflictException({
-          code: 'IDEMPOTENCY_CONFLICT',
+          code: error.code,
           message: error.message,
         });
       if (error instanceof InvalidWagerTransactionError)

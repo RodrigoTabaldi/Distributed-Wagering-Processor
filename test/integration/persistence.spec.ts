@@ -104,7 +104,7 @@ describe('PostgreSQL persistence', () => {
           ])
         )[0].table_name,
       ).not.toBeNull();
-      await orm.migrator.down({ schema });
+      await orm.migrator.down({ schema, to: 0 });
       expect(
         (
           await sql(`SELECT to_regclass(?) AS table_name`, [
@@ -113,7 +113,7 @@ describe('PostgreSQL persistence', () => {
         )[0].table_name,
       ).toBeNull();
       await orm.migrator.up({ schema });
-      await orm.migrator.down({ schema });
+      await orm.migrator.down({ schema, to: 0 });
     } finally {
       // Remove somente o schema identificado acima; RESTRICT impede apagar objetos esquecidos.
       await sql(`DROP TABLE IF EXISTS "${schema}".mikro_orm_migrations`);

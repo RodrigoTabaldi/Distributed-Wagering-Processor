@@ -1,3 +1,4 @@
+import { persistWagerOutcome } from './persist-wager-outcome.js';
 import { randomUUID } from 'node:crypto';
 import type { MoneyProps } from '../domain/money.js';
 import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry.js';
@@ -37,9 +38,10 @@ export class ProcessBet {
 
   // Permite registrar a entrada e processar o débito no MESMO commit, sem transação aninhada.
   async executeInTransaction(
-    { wallets, wagers, ledger }: RepositorySession,
+    session: RepositorySession,
     transactionId: string,
   ): Promise<ProcessBetResult> {
+    const { wallets, wagers, ledger } = session;
     const initial = await wagers.findById(transactionId);
     if (!initial) throw new InvalidBetError('TRANSACTION_NOT_FOUND');
     if (initial.kind !== WagerTransactionKind.Bet)
@@ -77,7 +79,8 @@ export class ProcessBet {
       // Só saldo insuficiente vira rejeição de negócio; falhas técnicas causam rollback.
       if (!(error instanceof InsufficientBalanceError)) throw error;
       tx.reject(FailureCode.InsufficientBalance);
-      await wagers.updateState(
+      await persistWagerOutcome(
+        session,
         tx,
         WagerTransactionStatus.Pending,
         at,
@@ -97,7 +100,8 @@ export class ProcessBet {
       await wallets.save(wallet, expectedVersion);
       await ledger.create(entry);
     }
-    await wagers.updateState(
+    await persistWagerOutcome(
+      session,
       tx,
       WagerTransactionStatus.Pending,
       at,

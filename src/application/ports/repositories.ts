@@ -1,4 +1,6 @@
 import type { Money } from '../../domain/money.js';
+import type { InboxMessage } from '../../domain/inbox-message.js';
+import type { OutboxMessage } from '../../domain/outbox-message.js';
 import type { Wallet } from '../../domain/wallet.js';
 import type { WalletLedgerEntry } from '../../domain/wallet-ledger-entry.js';
 import type {
@@ -11,6 +13,8 @@ import type {
 export interface WalletRepository {
   findById(id: string): Promise<Wallet | undefined>;
   findByIdForUpdate(id: string): Promise<Wallet | undefined>;
+  // Worker não espera por wallet ocupada: libera o lote para tentar outras wallets.
+  findByIdForUpdateSkipLocked(id: string): Promise<Wallet | undefined>;
   exists(playerId: string, currency: string): Promise<boolean>;
   create(wallet: Wallet): Promise<void>;
   save(wallet: Wallet, expectedVersion: number): Promise<void>;
@@ -60,6 +64,42 @@ export interface RepositorySession {
   wallets: WalletRepository;
   wagers: WagerRepository;
   ledger: LedgerRepository;
+  pendingReferences: PendingReferenceRepository;
+  inbox: InboxRepository;
+  outbox: OutboxRepository;
+}
+export interface OutboxRepository {
+  create(message: OutboxMessage): Promise<void>;
+  findById(id: string): Promise<OutboxMessage | undefined>;
+  // Seleciona um evento confirmado e devido; SKIP LOCKED permite publishers independentes.
+  lockNextDue(now: Date): Promise<OutboxMessage | undefined>;
+  save(message: OutboxMessage, expectedAttempts: number): Promise<void>;
+}
+
+export interface InboxRepository {
+  find(
+    consumerName: string,
+    messageId: string,
+  ): Promise<InboxMessage | undefined>;
+  // Exige transação; retorna a mensagem nova ou a existente sob lock exclusivo.
+  receive(message: InboxMessage): Promise<InboxMessage>;
+  markProcessed(message: InboxMessage): Promise<void>;
+}
+
+export interface PendingReferenceSchedule {
+  attempts: number;
+  nextAttemptAt: Date;
+}
+export interface PendingReferenceRepository {
+  findDue(now: Date, limit: number): Promise<string[]>;
+  findSchedule(
+    transactionId: string,
+  ): Promise<PendingReferenceSchedule | undefined>;
+  reschedule(
+    transactionId: string,
+    attempts: number,
+    nextAttemptAt: Date,
+  ): Promise<void>;
 }
 
 // Um único contexto reúne as gravações para confirmar tudo junto ou desfazer tudo.
@@ -67,6 +107,7 @@ export interface UnitOfWork {
   read<T>(operation: (session: RepositorySession) => Promise<T>): Promise<T>;
   transaction<T>(
     operation: (session: RepositorySession) => Promise<T>,
+    signal?: AbortSignal,
   ): Promise<T>;
 }
 export const UNIT_OF_WORK = Symbol('UNIT_OF_WORK');

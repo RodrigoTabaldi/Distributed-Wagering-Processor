@@ -1,4 +1,41 @@
 services:
+  messaging-test:
+    image: oven/bun:1.4.2
+    profiles: ['tests']
+    working_dir: /app
+    command:
+      [
+        'bun',
+        'test',
+        './test/integration/messaging.spec.ts',
+        '--timeout',
+        '30000',
+      ]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: ${DB_USER:-dwp}
+      DB_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env}
+      DB_NAME: dwp_test
+      SQS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    volumes:
+      - .:/app:ro
+  localstack:
+    image: localstack/localstack:4.14.0
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+      SQS_ENDPOINT_STRATEGY: path
+    ports:
+      - '127.0.0.1:4566:4566'
+    healthcheck:
+      test: ['CMD', 'awslocal', 'sqs', 'list-queues']
+      interval: 2s
+      timeout: 5s
+      retries: 30
   postgres:
     image: postgres:17.6-alpine
     environment:

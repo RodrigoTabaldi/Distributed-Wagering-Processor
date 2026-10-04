@@ -1,3 +1,4 @@
+import { persistWagerOutcome } from './persist-wager-outcome.js';
 import { randomUUID } from 'node:crypto';
 import { InvalidMoneyError, type MoneyProps } from '../domain/money.js';
 import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry.js';
@@ -35,9 +36,10 @@ export class ProcessRefund {
     );
   }
   async executeInTransaction(
-    { wallets, wagers, ledger }: RepositorySession,
+    session: RepositorySession,
     transactionId: string,
   ): Promise<ProcessRefundResult> {
+    const { wallets, wagers, ledger } = session;
     const initial = await wagers.findById(transactionId);
     if (!initial) throw new InvalidRefundError('TRANSACTION_NOT_FOUND');
     if (initial.kind !== WagerTransactionKind.Refund)
@@ -69,7 +71,13 @@ export class ProcessRefund {
     ): Promise<ProcessRefundResult> => {
       if (code) tx.reject(code);
       else tx.markPendingReference();
-      await wagers.updateState(tx, expectedStatus, at, wallet.balance);
+      await persistWagerOutcome(
+        session,
+        tx,
+        expectedStatus,
+        at,
+        wallet.balance,
+      );
       return {
         transactionId: tx.id,
         status: code
@@ -130,7 +138,7 @@ export class ProcessRefund {
       await wallets.save(wallet, expectedVersion);
       await ledger.create(entry);
     }
-    await wagers.updateState(tx, expectedStatus, at, wallet.balance);
+    await persistWagerOutcome(session, tx, expectedStatus, at, wallet.balance);
     return {
       transactionId: tx.id,
       status: WagerTransactionStatus.Processed,

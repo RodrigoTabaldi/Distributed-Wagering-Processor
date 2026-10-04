@@ -31,6 +31,10 @@ export interface WagerTransactionRecord {
   createdAt: Date;
   updatedAt: Date;
   observedBalance?: string;
+  referenceAttempts?: number;
+  referenceNextAttemptAt?: Date;
+  correlationId?: string;
+  causationId?: string;
 }
 export interface LedgerEntryRecord {
   id: string;
@@ -51,6 +55,25 @@ const monetaryColumn = () => ({
   scale: 2,
 });
 const timestampColumn = () => ({ type: Date, columnType: 'timestamptz' });
+
+export interface InboxMessageRecord {
+  consumerName: string;
+  messageId: string;
+  payloadHash: string;
+  receivedAt: Date;
+  processedAt?: Date;
+}
+export const InboxMessageEntity = new EntitySchema<InboxMessageRecord>({
+  name: 'InboxMessageRecord',
+  tableName: 'inbox_messages',
+  properties: {
+    consumerName: { type: 'string', columnType: 'text', primary: true },
+    messageId: { type: 'string', columnType: 'text', primary: true },
+    payloadHash: { type: 'string', length: 64 },
+    receivedAt: timestampColumn(),
+    processedAt: { ...timestampColumn(), nullable: true },
+  },
+});
 
 export const WalletEntity = new EntitySchema<WalletRecord>({
   name: 'WalletRecord',
@@ -93,6 +116,35 @@ export const WagerTransactionEntity = new EntitySchema<WagerTransactionRecord>({
     createdAt: timestampColumn(),
     updatedAt: timestampColumn(),
     observedBalance: { ...monetaryColumn(), nullable: true },
+    referenceAttempts: { type: 'integer', default: 0 },
+    referenceNextAttemptAt: { ...timestampColumn(), nullable: true },
+    correlationId: { type: 'string', columnType: 'text', nullable: true },
+    causationId: { type: 'string', columnType: 'text', nullable: true },
+  },
+});
+
+export interface OutboxMessageRecord {
+  id: string;
+  aggregateId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  occurredAt: Date;
+  attempts: number;
+  nextAttemptAt?: Date;
+  publishedAt?: Date;
+}
+export const OutboxMessageEntity = new EntitySchema<OutboxMessageRecord>({
+  name: 'OutboxMessageRecord',
+  tableName: 'outbox_messages',
+  properties: {
+    id: { type: 'uuid', primary: true },
+    aggregateId: { type: 'uuid' },
+    eventType: { type: 'string', columnType: 'text' },
+    payload: { type: 'json', columnType: 'jsonb' },
+    occurredAt: timestampColumn(),
+    attempts: { type: 'integer', default: 0 },
+    nextAttemptAt: { ...timestampColumn(), nullable: true },
+    publishedAt: { ...timestampColumn(), nullable: true },
   },
 });
 export const LedgerEntryEntity = new EntitySchema<LedgerEntryRecord>({

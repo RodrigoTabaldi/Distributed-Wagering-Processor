@@ -573,21 +573,21 @@ Regras:
 
 Objetivo: identificar rejeições de forma estável e legível por máquina.
 
-- [ ] Criar enum ou tipo de failure codes
-- [ ] Criar código para BET sem saldo
-- [ ] Criar código diferente para rollback sem saldo
-- [ ] Criar código para referência inexistente
-- [ ] Criar código para tipo de referência inválido
-- [ ] Criar código para referência já refundada
-- [ ] Criar código para referência já revertida
-- [ ] Criar código para valor divergente
-- [ ] Criar código para conflito de moeda
-- [ ] Criar código para conflito de player
-- [ ] Criar código para conflito de wallet
-- [ ] Criar código para conflito de rodada
-- [ ] Criar código para conflito de idempotência
-- [ ] Salvar failureCode na transaction
-- [ ] Documentar significado dos códigos
+- [x] Criar enum ou tipo de failure codes
+- [x] Criar código para BET sem saldo
+- [x] Criar código diferente para rollback sem saldo
+- [x] Criar código para referência inexistente
+- [x] Criar código para tipo de referência inválido
+- [x] Criar código para referência já refundada
+- [x] Criar código para referência já revertida
+- [x] Criar código para valor divergente
+- [x] Criar código para conflito de moeda
+- [x] Criar código para conflito de player
+- [x] Criar código para conflito de wallet
+- [x] Criar código para conflito de rodada
+- [x] Criar código para conflito de idempotência
+- [x] Salvar failureCode na transaction
+- [x] Documentar significado dos códigos
 
 ---
 
@@ -606,18 +606,18 @@ operação chega
 
 Implementação:
 
-- [ ] Detectar referência ausente
-- [ ] Salvar como PENDING_REFERENCE
-- [ ] Não rejeitar imediatamente
-- [ ] Criar worker de reprocessamento
-- [ ] Implementar exponential backoff
-- [ ] Controlar tentativas
-- [ ] Definir limite de tentativas ou TTL
-- [ ] Reprocessar quando referência aparecer
-- [ ] Marcar PROCESSED quando possível
-- [ ] Rejeitar após limite
-- [ ] Usar failureCode apropriado
-- [ ] Criar testes
+- [x] Detectar referência ausente
+- [x] Salvar como PENDING_REFERENCE
+- [x] Não rejeitar imediatamente
+- [x] Criar worker de reprocessamento
+- [x] Implementar exponential backoff
+- [x] Controlar tentativas
+- [x] Definir limite de tentativas ou TTL
+- [x] Reprocessar quando referência aparecer
+- [x] Marcar PROCESSED quando possível
+- [x] Rejeitar após limite
+- [x] Usar failureCode apropriado
+- [x] Criar testes
 
 ---
 
@@ -635,17 +635,17 @@ Criar `InboxMessage` com:
 
 Implementação:
 
-- [ ] Criar classe `InboxMessage`
-- [ ] Criar `receive()`
-- [ ] Criar `rehydrate()`
-- [ ] Criar `isProcessed()`
-- [ ] Criar `markProcessed()`
-- [ ] Criar tabela inbox
-- [ ] Criar UNIQUE `(consumerName, messageId)`
-- [ ] Garantir deduplicação persistente
-- [ ] Não depender de cache em memória
-- [ ] Incluir inbox na mesma transaction SQL da operação
-- [ ] Criar testes de redelivery
+- [x] Criar classe `InboxMessage`
+- [x] Criar `receive()`
+- [x] Criar `rehydrate()`
+- [x] Criar `isProcessed()`
+- [x] Criar `markProcessed()`
+- [x] Criar tabela inbox
+- [x] Criar UNIQUE `(consumerName, messageId)`
+- [x] Garantir deduplicação persistente
+- [x] Não depender de cache em memória
+- [x] Incluir inbox na mesma transaction SQL da operação
+- [x] Criar testes de redelivery
 
 ---
 
@@ -665,33 +665,33 @@ SQS
 
 Implementação:
 
-- [ ] Criar consumer
-- [ ] Ler `wager-transactions.fifo`
-- [ ] Validar envelope
-- [ ] Validar dados
-- [ ] Validar provider
-- [ ] Passar pela Inbox
-- [ ] Reutilizar o mesmo use case da entrada HTTP
-- [ ] Fazer ACK somente após commit
-- [ ] Erro de negócio deve ser terminal
-- [ ] Erro de negócio deve ser ACK
-- [ ] Erro transitório deve causar retry
-- [ ] Erro permanente deve ir para DLQ
-- [ ] Suportar redelivery
-- [ ] Garantir que redelivery não duplique saldo
+- [x] Criar consumer
+- [x] Ler `wager-transactions.fifo`
+- [x] Validar envelope
+- [x] Validar dados
+- [x] Validar provider
+- [x] Passar pela Inbox
+- [x] Reutilizar o mesmo use case da entrada HTTP
+- [x] Fazer ACK somente após commit
+- [x] Erro de negócio deve ser terminal
+- [x] Erro de negócio deve ser ACK
+- [x] Erro transitório deve causar retry
+- [x] Erro permanente deve ir para DLQ
+- [x] Suportar redelivery
+- [x] Garantir que redelivery não duplique saldo
 
 ---
 
 ## 21 — Retry e DLQ
 
-- [ ] Configurar `wager-transactions-dlq.fifo`
-- [ ] Configurar redrive policy
-- [ ] Definir limite de tentativas
-- [ ] Implementar retry
-- [ ] Implementar backoff
-- [ ] Encaminhar erro permanente para DLQ
-- [ ] Criar testes de retry
-- [ ] Criar testes de DLQ
+- [x] Configurar `wager-transactions-dlq.fifo`
+- [x] Configurar redrive policy
+- [x] Definir limite de tentativas
+- [x] Implementar retry
+- [x] Implementar backoff
+- [x] Encaminhar erro permanente para DLQ
+- [x] Criar testes de retry
+- [x] Criar testes de DLQ
 
 ---
 
@@ -712,24 +712,24 @@ Criar `IntegrationEvent<T>` com:
 
 Implementação:
 
-- [ ] Criar classe abstrata `IntegrationEvent`
-- [ ] Criar `toJSON()`
-- [ ] Garantir envelope estável
-- [ ] Serializar datas em ISO-8601
-- [ ] Serializar dinheiro usando MoneyProps
-- [ ] Nunca serializar instância Money diretamente
+- [x] Criar classe abstrata `IntegrationEvent`
+- [x] Criar `toJSON()`
+- [x] Garantir envelope estável
+- [x] Serializar datas em ISO-8601
+- [x] Serializar dinheiro usando MoneyProps
+- [x] Nunca serializar instância Money diretamente
 
 Eventos:
 
-- [ ] `WagerTransactionProcessed`
-- [ ] `WagerTransactionRejected`
-- [ ] `WalletBalanceChanged`
-- [ ] `WagerTransactionPendingReference`
+- [x] `WagerTransactionProcessed`
+- [x] `WagerTransactionRejected`
+- [x] `WalletBalanceChanged`
+- [x] `WagerTransactionPendingReference`
 
 Regras:
 
-- [ ] LOSS também gera `WagerTransactionProcessed`
-- [ ] `WalletBalanceChanged` somente quando saldo mudar
+- [x] LOSS também gera `WagerTransactionProcessed`
+- [x] `WalletBalanceChanged` somente quando saldo mudar
 
 ---
 
@@ -750,17 +750,17 @@ Criar `OutboxMessage` com:
 
 Implementação:
 
-- [ ] Criar classe `OutboxMessage`
-- [ ] Criar `enqueue()`
-- [ ] Criar `rehydrate()`
-- [ ] Criar `isPending()`
-- [ ] Criar `isDue()`
-- [ ] Criar `markPublished()`
-- [ ] Criar `scheduleRetry()`
-- [ ] Criar tabela outbox
-- [ ] Persistir evento dentro da mesma transaction financeira
-- [ ] Nunca publicar evento antes do commit
-- [ ] Garantir que evento confirmado não seja perdido após crash
+- [x] Criar classe `OutboxMessage`
+- [x] Criar `enqueue()`
+- [x] Criar `rehydrate()`
+- [x] Criar `isPending()`
+- [x] Criar `isDue()`
+- [x] Criar `markPublished()`
+- [x] Criar `scheduleRetry()`
+- [x] Criar tabela outbox
+- [x] Persistir evento dentro da mesma transaction financeira
+- [x] Nunca publicar evento antes do commit
+- [x] Garantir que evento confirmado não seja perdido após crash
 
 ---
 
@@ -777,20 +777,20 @@ Outbox
 
 Implementação:
 
-- [ ] Criar worker
-- [ ] Buscar eventos pendentes
-- [ ] Buscar somente eventos devidos
-- [ ] Suportar múltiplos publishers
-- [ ] Implementar locking dos registros
-- [ ] Considerar `FOR UPDATE SKIP LOCKED`
-- [ ] Publicar eventos
-- [ ] Marcar publishedAt após sucesso
-- [ ] Incrementar attempts em falha
-- [ ] Calcular próximo retry
-- [ ] Criar backoff
-- [ ] Tolerar publicação duplicada
-- [ ] Criar teste com dois publishers
-- [ ] Criar teste de crash depois do commit e antes da publicação
+- [x] Criar worker
+- [x] Buscar eventos pendentes
+- [x] Buscar somente eventos devidos
+- [x] Suportar múltiplos publishers
+- [x] Implementar locking dos registros
+- [x] Considerar `FOR UPDATE SKIP LOCKED`
+- [x] Publicar eventos
+- [x] Marcar publishedAt após sucesso
+- [x] Incrementar attempts em falha
+- [x] Calcular próximo retry
+- [x] Criar backoff
+- [x] Tolerar publicação duplicada
+- [x] Criar teste com dois publishers
+- [x] Criar teste de crash depois do commit e antes da publicação
 
 ---
 
@@ -798,14 +798,14 @@ Implementação:
 
 Objetivo: encerrar aplicação sem perder mensagens.
 
-- [ ] Tratar SIGTERM
-- [ ] Parar de buscar novas mensagens
-- [ ] Finalizar mensagens em andamento quando possível
-- [ ] Caso necessário, devolver visibilidade ao SQS
-- [ ] Fechar conexão PostgreSQL
-- [ ] Encerrar workers
-- [ ] Encerrar consumer
-- [ ] Testar encerramento durante processamento
+- [x] Tratar SIGTERM
+- [x] Parar de buscar novas mensagens
+- [x] Finalizar mensagens em andamento quando possível
+- [x] Caso necessário, devolver visibilidade ao SQS
+- [x] Fechar conexão PostgreSQL
+- [x] Encerrar workers
+- [x] Encerrar consumer
+- [x] Testar encerramento durante processamento
 
 ---
 

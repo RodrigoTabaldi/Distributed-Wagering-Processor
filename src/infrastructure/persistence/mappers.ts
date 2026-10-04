@@ -1,4 +1,6 @@
 import { Money } from '../../domain/money.js';
+import { InboxMessage } from '../../domain/inbox-message.js';
+import { OutboxMessage } from '../../domain/outbox-message.js';
 import { Wallet } from '../../domain/wallet.js';
 import {
   LedgerDirection,
@@ -11,10 +13,49 @@ import {
   type WagerTransactionStatus,
 } from '../../domain/wager-transaction.js';
 import type {
+  InboxMessageRecord,
+  OutboxMessageRecord,
   LedgerEntryRecord,
   WagerTransactionRecord,
   WalletRecord,
 } from './entities.js';
+
+export function outboxToRecord(message: OutboxMessage): OutboxMessageRecord {
+  return {
+    id: message.id,
+    aggregateId: message.aggregateId,
+    eventType: message.eventType,
+    // O ORM normaliza objetos recebidos; cópia profunda preserva o envelope imutável do domínio.
+    payload: structuredClone(message.payload),
+    occurredAt: message.occurredAt,
+    attempts: message.attempts,
+    nextAttemptAt: message.nextAttemptAt,
+    publishedAt: message.publishedAt,
+  };
+}
+export function outboxFromRecord(row: OutboxMessageRecord): OutboxMessage {
+  return OutboxMessage.rehydrate({
+    ...row,
+    nextAttemptAt: row.nextAttemptAt ?? undefined,
+    publishedAt: row.publishedAt ?? undefined,
+  });
+}
+
+export function inboxToRecord(message: InboxMessage): InboxMessageRecord {
+  return {
+    consumerName: message.consumerName,
+    messageId: message.messageId,
+    payloadHash: message.payloadHash,
+    receivedAt: message.receivedAt,
+    processedAt: message.processedAt,
+  };
+}
+export function inboxFromRecord(row: InboxMessageRecord): InboxMessage {
+  return InboxMessage.rehydrate({
+    ...row,
+    processedAt: row.processedAt ?? undefined,
+  });
+}
 
 // Traduz domínio → colunas sem expor Decimal ou campos privados ao ORM.
 export function walletToRecord(wallet: Wallet): WalletRecord {
@@ -57,13 +98,16 @@ export function transactionToRecord(
     failureCode: tx.failureCode,
     processedAt: tx.processedAt,
     createdAt: tx.createdAt,
+    correlationId: tx.correlationId,
+    causationId: tx.causationId,
     updatedAt,
   };
 }
 export function transactionFromRecord(
   row: WagerTransactionRecord,
 ): WagerTransaction {
-  // O schema valida os enums; rehydrate não executa novamente regras de transição.
+  // O schema valida kind/status; o domínio valida failureCode ao transicionar.
+  // Rehydrate recupera o código salvo sem repetir a rejeição ou a movimentação.
   return WagerTransaction.rehydrate({
     ...row,
     kind: row.kind as WagerTransactionKind,

@@ -21,22 +21,40 @@ export enum WagerTransactionStatus {
 }
 
 // Códigos estáveis permitem interpretar uma falha sem depender do texto da mensagem.
-// A aplicação usará esses códigos ao processar saldo, referências e infraestrutura.
+// O valor da string é o contrato público: não o altere para mudar somente a mensagem de erro.
+// Rejeições de negócio ficam salvas na transação; conflito de idempotência rejeita a requisição.
 export enum FailureCode {
+  // Somar um crédito ultrapassaria a capacidade de NUMERIC(20,2), sem arredondar ou perder centavos.
   BalanceLimitExceeded = 'BALANCE_LIMIT_EXCEEDED',
+  // A BET tentou descontar mais dinheiro do que a wallet possui.
   InsufficientBalance = 'INSUFFICIENT_BALANCE',
+  // Desfazer um WIN/REFUND exige débito, mas o valor creditado já foi gasto.
   ReversalInsufficientBalance = 'REVERSAL_INSUFFICIENT_BALANCE',
+  // A referência não chegou: o worker usa este código após esgotar as tentativas ou o TTL.
   ReferenceNotFound = 'REFERENCE_NOT_FOUND',
+  // A origem existe, mas não está PROCESSED; origens ainda pendentes aguardam, sem rejeição final.
   ReferenceNotProcessed = 'REFERENCE_NOT_PROCESSED',
+  // O tipo da origem não é permitido para a operação, como REFUND referenciando WIN.
   InvalidReferenceKind = 'INVALID_REFERENCE_KIND',
+  // A origem pertence a outro provedor; buscar por provedor + ID externo evita esse vínculo inválido.
   ProviderMismatch = 'PROVIDER_MISMATCH',
+  // O jogador da operação/origem não corresponde ao jogador esperado.
   PlayerMismatch = 'PLAYER_MISMATCH',
+  // A origem aponta para outra wallet; uma reversão não pode transferir dinheiro entre wallets.
   WalletMismatch = 'WALLET_MISMATCH',
+  // A moeda difere da wallet/origem; valores de moedas diferentes nunca são somados ou comparados.
   CurrencyMismatch = 'CURRENCY_MISMATCH',
+  // A origem pertence a outra rodada de jogo.
   RoundMismatch = 'ROUND_MISMATCH',
+  // REFUND/ROLLBACK precisam devolver/desfazer o valor integral da origem, sem reversão parcial.
   ReferenceAmountMismatch = 'REFERENCE_AMOUNT_MISMATCH',
+  // Outra operação REFUND já foi processada para essa BET; reenvio da mesma chave recebe replay.
   ReferenceAlreadyRefunded = 'REFERENCE_ALREADY_REFUNDED',
+  // Outra operação ROLLBACK já foi processada para essa origem.
   ReferenceAlreadyRolledBack = 'REFERENCE_ALREADY_ROLLED_BACK',
+  // Uma identidade foi reutilizada com outros dados; retorna 409 sem modificar a operação original.
+  IdempotencyConflict = 'IDEMPOTENCY_CONFLICT',
+  // Falha técnica declarada permanente. Erros transitórios continuam com rollback e retry, não REJECTED.
   PermanentInfrastructureFailure = 'PERMANENT_INFRASTRUCTURE_FAILURE',
 }
 
@@ -55,6 +73,8 @@ export interface CreateWagerTransactionProps {
   money: Money;
   referenceExternalTransactionId?: string;
   createdAt: Date;
+  correlationId?: string;
+  causationId?: string;
 }
 
 // A persistência fornecerá também os campos de estado ao reconstruir uma operação.
@@ -87,6 +107,8 @@ export class InvalidTransactionReferenceError extends Error {
 }
 
 export class IdempotencyConflictError extends Error {
+  // O adapter HTTP usa o mesmo código estável do domínio, sem repetir uma string avulsa.
+  readonly code = FailureCode.IdempotencyConflict;
   constructor() {
     super('Idempotency key was reused with a different payload');
     this.name = 'IdempotencyConflictError';
@@ -107,6 +129,8 @@ export class WagerTransaction {
   public readonly kind: WagerTransactionKind;
   public readonly money: Money;
   public readonly referenceExternalTransactionId?: string;
+  public readonly correlationId?: string;
+  public readonly causationId?: string;
   readonly #createdAt: Date;
   #status: WagerTransactionStatus;
   #referenceTransactionId?: string;
@@ -126,6 +150,8 @@ export class WagerTransaction {
     this.kind = state.kind;
     this.money = state.money;
     this.referenceExternalTransactionId = state.referenceExternalTransactionId;
+    this.correlationId = state.correlationId;
+    this.causationId = state.causationId;
     // Copiar datas impede que alterações externas modifiquem o histórico.
     this.#createdAt = new Date(state.createdAt.getTime());
     this.#status = state.status;

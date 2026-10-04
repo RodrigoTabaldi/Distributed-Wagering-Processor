@@ -1,3 +1,4 @@
+import { persistWagerOutcome } from './persist-wager-outcome.js';
 import { randomUUID } from 'node:crypto';
 import { InvalidMoneyError, type MoneyProps } from '../domain/money.js';
 import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry.js';
@@ -37,9 +38,10 @@ export class ProcessRollback {
     );
   }
   async executeInTransaction(
-    { wallets, wagers, ledger }: RepositorySession,
+    session: RepositorySession,
     transactionId: string,
   ): Promise<ProcessRollbackResult> {
+    const { wallets, wagers, ledger } = session;
     const initial = await wagers.findById(transactionId);
     if (!initial) throw new InvalidRollbackError('TRANSACTION_NOT_FOUND');
     if (initial.kind !== WagerTransactionKind.Rollback)
@@ -71,7 +73,13 @@ export class ProcessRollback {
     ): Promise<ProcessRollbackResult> => {
       if (code) tx.reject(code);
       else tx.markPendingReference();
-      await wagers.updateState(tx, expectedStatus, at, wallet.balance);
+      await persistWagerOutcome(
+        session,
+        tx,
+        expectedStatus,
+        at,
+        wallet.balance,
+      );
       return {
         transactionId: tx.id,
         status: code
@@ -145,7 +153,7 @@ export class ProcessRollback {
       await wallets.save(wallet, expectedVersion);
       await ledger.create(entry);
     }
-    await wagers.updateState(tx, expectedStatus, at, wallet.balance);
+    await persistWagerOutcome(session, tx, expectedStatus, at, wallet.balance);
     return {
       transactionId: tx.id,
       status: WagerTransactionStatus.Processed,

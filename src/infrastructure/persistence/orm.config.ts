@@ -1,11 +1,16 @@
 import { Migrator } from '@mikro-orm/migrations';
 import { defineConfig } from '@mikro-orm/postgresql';
 import {
+  InboxMessageEntity,
+  OutboxMessageEntity,
   LedgerEntryEntity,
   WagerTransactionEntity,
   WalletEntity,
 } from './entities.js';
 import { Migration202610030001 } from './migrations/Migration202610030001.js';
+import { Migration202610030002 } from './migrations/Migration202610030002.js';
+import { Migration202610030003 } from './migrations/Migration202610030003.js';
+import { Migration202610030004 } from './migrations/Migration202610030004.js';
 
 // Credenciais vêm do ambiente; nunca são registradas em logs ou versionadas.
 export function createOrmConfig(dbName = process.env.DB_NAME ?? 'dwp') {
@@ -20,10 +25,21 @@ export function createOrmConfig(dbName = process.env.DB_NAME ?? 'dwp') {
     user: process.env.DB_USER ?? 'dwp',
     password,
     dbName,
-    entities: [WalletEntity, WagerTransactionEntity, LedgerEntryEntity],
+    entities: [
+      WalletEntity,
+      WagerTransactionEntity,
+      LedgerEntryEntity,
+      InboxMessageEntity,
+      OutboxMessageEntity,
+    ],
     extensions: [Migrator],
     migrations: {
-      migrationsList: [Migration202610030001],
+      migrationsList: [
+        Migration202610030001,
+        Migration202610030002,
+        Migration202610030003,
+        Migration202610030004,
+      ],
       transactional: true,
       allOrNothing: true,
       snapshot: false,

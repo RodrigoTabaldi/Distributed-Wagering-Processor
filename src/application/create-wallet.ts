@@ -4,6 +4,7 @@ import { Wallet } from '../domain/wallet.js';
 import { WagerTransaction } from '../domain/wager-transaction.js';
 import { WalletAlreadyExistsError } from './errors.js';
 import type { UnitOfWork } from './ports/repositories.js';
+import { enqueueWagerEvents } from './persist-wager-outcome.js';
 
 export interface CreateWalletInput {
   playerId: string;
@@ -23,7 +24,8 @@ export class CreateWallet {
   async execute(input: CreateWalletInput): Promise<CreateWalletResult> {
     // Money valida escala, moeda, sinal e limite antes de iniciar qualquer gravação.
     const initialBalance = Money.from(input.initialBalance);
-    return this.unitOfWork.transaction(async ({ wallets, wagers, ledger }) => {
+    return this.unitOfWork.transaction(async (session) => {
+      const { wallets, wagers, ledger } = session;
       if (await wallets.exists(input.playerId, initialBalance.currency))
         throw new WalletAlreadyExistsError();
       const at = new Date();
@@ -64,6 +66,7 @@ export class CreateWallet {
         opening.markProcessed(undefined, at);
         await wagers.create(opening, wallet.balance);
         await ledger.create(openingEntry);
+        await enqueueWagerEvents(session, opening, at, wallet.balance);
       }
       // UnitOfWork só entrega esta resposta após confirmar o commit de todos os registros.
       return {

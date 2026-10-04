@@ -10,6 +10,8 @@ import type {
   WagerTransactionKind,
 } from '../../domain/wager-transaction.js';
 import {
+  type InboxRepository,
+  type OutboxRepository,
   InvalidLedgerPageError,
   PersistenceConflictError,
   TransactionRequiredError,
@@ -18,14 +20,22 @@ import {
   type LedgerRepository,
   type LedgerPage,
   type LedgerPageOptions,
+  type PendingReferenceRepository,
+  type PendingReferenceSchedule,
 } from '../../application/ports/repositories.js';
+import { referenceRetryDelay } from '../../application/reference-retry-policy.js';
 import {
+  InboxMessageEntity,
+  OutboxMessageEntity,
   WalletEntity,
   WagerTransactionEntity,
   LedgerEntryEntity,
   type LedgerEntryRecord,
 } from './entities.js';
 import {
+  inboxFromRecord,
+  outboxFromRecord,
+  outboxToRecord,
   walletFromRecord,
   walletToRecord,
   transactionFromRecord,
@@ -33,6 +43,98 @@ import {
   ledgerFromRecord,
   ledgerToRecord,
 } from './mappers.js';
+import { InboxMessage } from '../../domain/inbox-message.js';
+import { OutboxMessage } from '../../domain/outbox-message.js';
+
+export class PostgreSqlOutboxRepository implements OutboxRepository {
+  constructor(private readonly em: EntityManager) {}
+  async create(message: OutboxMessage): Promise<void> {
+    requireTransaction(this.em);
+    await this.em.insert(OutboxMessageEntity, outboxToRecord(message));
+  }
+  async findById(id: string): Promise<OutboxMessage | undefined> {
+    const row = await this.em.findOne(
+      OutboxMessageEntity,
+      { id },
+      { refresh: true },
+    );
+    return row ? outboxFromRecord(row) : undefined;
+  }
+  async lockNextDue(now: Date): Promise<OutboxMessage | undefined> {
+    requireTransaction(this.em);
+    // A transação mantém o lock até confirmar publicação/retry. Outro publisher pula este registro.
+    const rows = await this.em.execute(
+      `SELECT id FROM outbox_messages
+      WHERE published_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+      ORDER BY occurred_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`,
+      [now],
+    );
+    return rows.length ? this.findById(rows[0].id) : undefined;
+  }
+  async save(message: OutboxMessage, expectedAttempts: number): Promise<void> {
+    requireTransaction(this.em);
+    const affected = await this.em.nativeUpdate(
+      OutboxMessageEntity,
+      { id: message.id, attempts: expectedAttempts, publishedAt: null },
+      {
+        attempts: message.attempts,
+        nextAttemptAt: message.nextAttemptAt ?? null,
+        publishedAt: message.publishedAt ?? null,
+      },
+    );
+    if (affected !== 1) throw new PersistenceConflictError();
+  }
+}
+
+export class PostgreSqlInboxRepository implements InboxRepository {
+  constructor(private readonly em: EntityManager) {}
+  async find(
+    consumerName: string,
+    messageId: string,
+  ): Promise<InboxMessage | undefined> {
+    const row = await this.em.findOne(
+      InboxMessageEntity,
+      { consumerName, messageId },
+      { refresh: true },
+    );
+    return row ? inboxFromRecord(row) : undefined;
+  }
+  async receive(message: InboxMessage): Promise<InboxMessage> {
+    requireTransaction(this.em);
+    // ON CONFLICT espera o concorrente concluir sem abortar nossa transação por violação UNIQUE.
+    await this.em.execute(
+      `INSERT INTO inbox_messages (consumer_name, message_id, payload_hash, received_at)
+      VALUES (?, ?, ?, ?) ON CONFLICT (consumer_name, message_id) DO NOTHING`,
+      [
+        message.consumerName,
+        message.messageId,
+        message.payloadHash,
+        message.receivedAt,
+      ],
+    );
+    const row = await this.em.findOneOrFail(
+      InboxMessageEntity,
+      { consumerName: message.consumerName, messageId: message.messageId },
+      { refresh: true, lockMode: LockMode.PESSIMISTIC_WRITE },
+    );
+    return inboxFromRecord(row);
+  }
+  async markProcessed(message: InboxMessage): Promise<void> {
+    requireTransaction(this.em);
+    if (!message.isProcessed())
+      throw new Error('Inbox message must be marked processed');
+    const affected = await this.em.nativeUpdate(
+      InboxMessageEntity,
+      {
+        consumerName: message.consumerName,
+        messageId: message.messageId,
+        processedAt: null,
+      },
+      { processedAt: message.processedAt },
+    );
+    if (affected !== 1) throw new PersistenceConflictError();
+  }
+}
 
 // Todos os repositories da sessão recebem o MESMO EntityManager, sem abrir outro commit.
 function requireTransaction(em: EntityManager): void {
@@ -56,6 +158,15 @@ export class PostgreSqlWalletRepository implements WalletRepository {
       { refresh: true, lockMode: LockMode.PESSIMISTIC_WRITE },
     );
     return row ? walletFromRecord(row) : undefined;
+  }
+  async findByIdForUpdateSkipLocked(id: string): Promise<Wallet | undefined> {
+    requireTransaction(this.em);
+    const rows = await this.em.execute(
+      'SELECT id FROM wallets WHERE id = ? FOR UPDATE SKIP LOCKED',
+      [id],
+    );
+    // Busca o estado após adquirir o lock; ausência aqui também pode significar wallet ocupada.
+    return rows.length ? this.findById(id) : undefined;
   }
   async exists(playerId: string, currency: string): Promise<boolean> {
     return (await this.em.count(WalletEntity, { playerId, currency })) > 0;
@@ -134,6 +245,14 @@ export class PostgreSqlWagerRepository implements WagerRepository {
     await this.em.insert(WagerTransactionEntity, {
       ...transactionToRecord(tx, tx.createdAt),
       observedBalance: observedBalance?.toString(),
+      // Também agenda registros já criados como pendentes, além do fluxo normal da API.
+      ...(tx.status === 'PENDING_REFERENCE'
+        ? {
+            referenceNextAttemptAt: new Date(
+              tx.createdAt.getTime() + referenceRetryDelay(0),
+            ),
+          }
+        : {}),
     });
   }
   async findObservedBalance(id: string): Promise<Money | undefined> {
@@ -175,6 +294,10 @@ export class PostgreSqlWagerRepository implements WagerRepository {
         referenceTransactionId: tx.referenceTransactionId ?? null,
         failureCode: tx.failureCode ?? null,
         processedAt: tx.processedAt ?? null,
+        // Uma operação terminal sai da agenda no MESMO UPDATE que salva o resultado.
+        ...(tx.status !== 'PENDING_REFERENCE'
+          ? { referenceNextAttemptAt: null }
+          : {}),
         updatedAt: at,
         ...(observedBalance
           ? { observedBalance: observedBalance.toString() }
@@ -182,12 +305,85 @@ export class PostgreSqlWagerRepository implements WagerRepository {
       },
     );
     if (affected !== 1) throw new PersistenceConflictError();
+    if (tx.status === 'PENDING_REFERENCE') {
+      // Agenda só a primeira espera; reler ou reprocessar não reinicia o backoff existente.
+      await this.em.execute(
+        `UPDATE wager_transactions SET reference_next_attempt_at = COALESCE(reference_next_attempt_at, ?)
+        WHERE id = ? AND status = 'PENDING_REFERENCE'`,
+        [new Date(at.getTime() + referenceRetryDelay(0)), tx.id],
+      );
+    }
   }
   private assertBalanceCurrency(tx: WagerTransaction, balance?: Money): void {
     if (balance && tx.money.currency !== balance.currency)
       throw new CurrencyMismatchError(tx.money.currency, balance.currency);
     if (balance?.isNegative())
       throw new Error('Observed wallet balance cannot be negative');
+  }
+}
+
+export class PostgreSqlPendingReferenceRepository implements PendingReferenceRepository {
+  constructor(private readonly em: EntityManager) {}
+  async findDue(now: Date, limit: number): Promise<string[]> {
+    if (
+      !Number.isFinite(now.getTime()) ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    )
+      throw new Error('Invalid pending reference batch');
+    const rows = await this.em.find(
+      WagerTransactionEntity,
+      {
+        status: 'PENDING_REFERENCE',
+        referenceNextAttemptAt: { $lte: now },
+      },
+      {
+        orderBy: { referenceNextAttemptAt: 'asc', id: 'asc' },
+        limit,
+        refresh: true,
+      },
+    );
+    return rows.map((row) => row.id);
+  }
+  async findSchedule(
+    transactionId: string,
+  ): Promise<PendingReferenceSchedule | undefined> {
+    const row = await this.em.findOne(
+      WagerTransactionEntity,
+      { id: transactionId, status: 'PENDING_REFERENCE' },
+      { refresh: true },
+    );
+    return row?.referenceNextAttemptAt
+      ? {
+          attempts: row.referenceAttempts ?? 0,
+          nextAttemptAt: new Date(row.referenceNextAttemptAt),
+        }
+      : undefined;
+  }
+  async reschedule(
+    transactionId: string,
+    attempts: number,
+    nextAttemptAt: Date,
+  ): Promise<void> {
+    requireTransaction(this.em);
+    if (
+      !Number.isInteger(attempts) ||
+      attempts < 1 ||
+      !Number.isFinite(nextAttemptAt.getTime())
+    )
+      throw new Error('Invalid pending reference schedule');
+    // A contagem esperada protege contra atualização perdida, além do lock da wallet.
+    const affected = await this.em.nativeUpdate(
+      WagerTransactionEntity,
+      {
+        id: transactionId,
+        status: 'PENDING_REFERENCE',
+        referenceAttempts: attempts - 1,
+      },
+      { referenceAttempts: attempts, referenceNextAttemptAt: nextAttemptAt },
+    );
+    if (affected !== 1) throw new PersistenceConflictError();
   }
 }
 

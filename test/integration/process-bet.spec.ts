@@ -218,6 +218,8 @@ describe('ProcessBet with PostgreSQL', () => {
               scenario === 'missing-wallet'
                 ? async () => undefined
                 : session.wallets.findByIdForUpdate.bind(session.wallets),
+            findByIdForUpdateSkipLocked:
+              session.wallets.findByIdForUpdateSkipLocked.bind(session.wallets),
             exists: session.wallets.exists.bind(session.wallets),
             create: session.wallets.create.bind(session.wallets),
             save: session.wallets.save.bind(session.wallets),

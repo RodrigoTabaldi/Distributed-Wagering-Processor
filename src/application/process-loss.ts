@@ -1,3 +1,4 @@
+import { persistWagerOutcome } from './persist-wager-outcome.js';
 import type { MoneyProps } from '../domain/money.js';
 import {
   FailureCode,
@@ -31,9 +32,10 @@ export class ProcessLoss {
   }
 
   async executeInTransaction(
-    { wallets, wagers }: RepositorySession,
+    session: RepositorySession,
     transactionId: string,
   ): Promise<ProcessLossResult> {
+    const { wallets, wagers } = session;
     const initial = await wagers.findById(transactionId);
     if (!initial) throw new InvalidLossError('TRANSACTION_NOT_FOUND');
     if (initial.kind !== WagerTransactionKind.Loss)
@@ -58,7 +60,8 @@ export class ProcessLoss {
     tx.markProcessed(undefined, at);
     // Grava somente o resultado e o saldo observado para replay; não chama debit, credit ou save.
     // Mesmo que o payload tenha valor positivo, LOSS não representa movimentação financeira.
-    await wagers.updateState(
+    await persistWagerOutcome(
+      session,
       tx,
       WagerTransactionStatus.Pending,
       at,

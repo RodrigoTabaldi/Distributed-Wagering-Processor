@@ -942,3 +942,20 @@ ProcessRefund devolve integralmente uma BET PROCESSED, validando seus vínculos 
 ## ROLLBACK implementado — tarefa 16
 
 ProcessRollback inverte BET (crédito) e WIN/REFUND (débito), preservando o ledger original. O domínio valida origem PROCESSED e todos os vínculos/valor; o lock por wallet e o índice parcial de reversões garantem uma execução por referência/tipo entre processos. Débito sem saldo rejeita com REVERSAL_INSUFFICIENT_BALANCE, distinto da BET. Registro, movimento, ledger e resultado compartilham o commit. Pendências continuam sem movimentação até a etapa de reprocessamento. Regras e evidências estão em [docs/rollback.md](docs/rollback.md).
+
+
+## Failure Codes documentados — tarefa 17
+
+O enum FailureCode define strings públicas estáveis e comentadas. Rejeições financeiras persistem failureCode na transação e o replay preserva o resultado original. IdempotencyConflictError expõe o código do enum ao HTTP 409 sem alterar a operação original. Referências ainda pendentes não recebem código de rejeição prematuro; a finalização REFERENCE_NOT_FOUND e a política de falhas permanentes permanecem nas etapas correspondentes. Significados, distinções HTTP e testes estão em [docs/failure-codes.md](docs/failure-codes.md).
+
+## Pending Reference implementado — tarefa 18
+
+Agenda persistida no PostgreSQL, backoff de 1 a 60 segundos, 20 tentativas e TTL de 30 minutos. Worker NestJS retoma os processadores no mesmo commit da agenda, com lock por wallet e SKIP LOCKED. Referências não resolvidas terminam com failureCode explícito, sem movimento; referências válidas produzem um único resultado e ledger. Eventos dependem das tarefas de Outbox/publicação. Política, limites e testes em [docs/pending-references.md](docs/pending-references.md).
+
+## Inbox implementada — tarefa 19
+
+InboxMessage encapsula identidade, hash e datas de recebimento/conclusão. A chave primária composta (consumerName, messageId) garante UNIQUE persistente; ON CONFLICT + lock do registro coordenam redelivery concorrente. ProcessInboxMessage executa a callback financeira na mesma RepositorySession e só retorna após o commit da Inbox e dos movimentos. Hash divergente causa conflito; falhas desfazem o conjunto. O consumer SQS e ACK permanecem na tarefa 20. Decisões e testes em [docs/inbox.md](docs/inbox.md).
+
+## SQS, eventos, Outbox e shutdown — tarefas 20 a 25
+
+Consumer valida envelope/provedor e reutiliza SubmitWager na sessão da Inbox. ACK somente após commit, retry por visibilidade e DLQ com limite de cinco recebimentos. Classes IntegrationEvent versionadas produzem dados JSON imutáveis com MoneyProps. Processadores e worker de referências gravam resultado e Outbox juntos; publisher independente usa SKIP LOCKED e eventId estável, com semântica ao menos uma vez. Shutdown para polling, aguarda trabalho e cancela SQL/devolve visibilidade quando necessário, antes de fechar conexões. Testes usam PostgreSQL/LocalStack, publishers concorrentes, processos mortos após commit e SIGTERM real em Linux. Setup, decisões e limites em [docs/messaging.md](docs/messaging.md).
