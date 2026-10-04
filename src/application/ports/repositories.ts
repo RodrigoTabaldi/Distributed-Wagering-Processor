@@ -4,6 +4,7 @@ import type { WalletLedgerEntry } from '../../domain/wallet-ledger-entry.js';
 import type {
   WagerTransaction,
   WagerTransactionStatus,
+  WagerTransactionKind,
 } from '../../domain/wager-transaction.js';
 
 // Portas são contratos da aplicação; não importam NestJS, MikroORM ou PostgreSQL.
@@ -21,6 +22,13 @@ export interface WagerRepository {
     externalTransactionId: string,
   ): Promise<WagerTransaction | undefined>;
   findByIdempotencyKey(key: string): Promise<WagerTransaction | undefined>;
+  // Saldo observado pertence ao resultado original, não ao saldo atual da wallet.
+  findObservedBalance(id: string): Promise<Money | undefined>;
+  // Consulta a reversão finalizada; tentativas pendentes/rejeitadas não consomem a referência.
+  hasProcessedReversal(
+    referenceId: string,
+    kind: WagerTransactionKind,
+  ): Promise<boolean>;
   create(tx: WagerTransaction, observedBalance?: Money): Promise<void>;
   updateState(
     tx: WagerTransaction,

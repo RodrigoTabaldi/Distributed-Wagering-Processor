@@ -7,6 +7,7 @@ import type { WalletLedgerEntry } from '../../domain/wallet-ledger-entry.js';
 import type {
   WagerTransaction,
   WagerTransactionStatus,
+  WagerTransactionKind,
 } from '../../domain/wager-transaction.js';
 import {
   InvalidLedgerPageError,
@@ -134,6 +135,28 @@ export class PostgreSqlWagerRepository implements WagerRepository {
       ...transactionToRecord(tx, tx.createdAt),
       observedBalance: observedBalance?.toString(),
     });
+  }
+  async findObservedBalance(id: string): Promise<Money | undefined> {
+    const row = await this.em.findOne(
+      WagerTransactionEntity,
+      { id },
+      { refresh: true },
+    );
+    return row?.observedBalance != null
+      ? Money.from({ amount: row.observedBalance, currency: row.currency })
+      : undefined;
+  }
+  async hasProcessedReversal(
+    referenceId: string,
+    kind: WagerTransactionKind,
+  ): Promise<boolean> {
+    return (
+      (await this.em.count(WagerTransactionEntity, {
+        referenceTransactionId: referenceId,
+        kind,
+        status: 'PROCESSED',
+      })) > 0
+    );
   }
   async updateState(
     tx: WagerTransaction,

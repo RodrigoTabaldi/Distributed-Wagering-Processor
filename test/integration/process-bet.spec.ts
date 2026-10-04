@@ -230,6 +230,12 @@ describe('ProcessBet with PostgreSQL', () => {
             findByIdempotencyKey: session.wagers.findByIdempotencyKey.bind(
               session.wagers,
             ),
+            findObservedBalance: session.wagers.findObservedBalance.bind(
+              session.wagers,
+            ),
+            hasProcessedReversal: session.wagers.hasProcessedReversal.bind(
+              session.wagers,
+            ),
             create: session.wagers.create.bind(session.wagers),
             updateState: session.wagers.updateState.bind(session.wagers),
           },
@@ -278,6 +284,12 @@ describe('ProcessBet with PostgreSQL', () => {
               session.wagers,
             ),
             findByIdempotencyKey: session.wagers.findByIdempotencyKey.bind(
+              session.wagers,
+            ),
+            findObservedBalance: session.wagers.findObservedBalance.bind(
+              session.wagers,
+            ),
+            hasProcessedReversal: session.wagers.hasProcessedReversal.bind(
               session.wagers,
             ),
             create: session.wagers.create.bind(session.wagers),

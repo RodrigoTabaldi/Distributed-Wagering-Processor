@@ -31,3 +31,9 @@ Falhas técnicas propagam o erro e causam rollback. Não são convertidas em rej
 Execute `bun test ./test/integration/process-bet.spec.ts --timeout 30000`, com o banco `dwp_test` configurado conforme [persistence.md](persistence.md).
 
 A tarefa 11 ainda deve verificar seu cenário próprio de apostas distintas concorrentes e múltiplas instâncias; o teste concorrente desta etapa usa duas execuções do mesmo ID no mesmo processo.
+
+
+Desde a tarefa 12, SubmitWager conecta este processamento ao endpoint POST /wagering/transactions e controla o replay antes de chamar ProcessBet. A API e a persistência do resultado estão descritas em [idempotency.md](idempotency.md).
+
+
+Atualização da tarefa 13: o fluxo agora atende BET e WIN. A referência opcional entra no hash e o estado PENDING_REFERENCE é devolvido com HTTP 202. Consulte [win.md](win.md).

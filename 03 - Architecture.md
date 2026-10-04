@@ -912,3 +912,33 @@ Provider
                       |
                       v
                      SQS![alt text](<04 - Arquitetura_Distributed_Wagering_Processor.jpg>)
+
+
+## Concorrência implementada — tarefa 11
+
+A unidade de concorrência é walletId. Usamos SELECT FOR UPDATE via LockMode.PESSIMISTIC_WRITE dentro da transação SQL, releitura do estado da BET após adquirir o lock e atualização condicionada à versão anterior da wallet. A garantia está no PostgreSQL e funciona entre processos independentes, sem lock global em memória. O custo é serializar operações da mesma wallet; chamadas externas devem ficar fora dessa transação. Cenários, evidências e limitações estão em [docs/concurrency.md](docs/concurrency.md).
+
+
+## Idempotência implementada — tarefa 12
+
+SubmitBet usa a chave obrigatória do header e SHA-256 de JSON canônico dos campos de negócio normalizados. UNIQUE no PostgreSQL protege a chave global e o par providerId/externalTransactionId. Registro, processamento financeiro e saldo observado participam do mesmo commit. Replays devolvem o resultado persistido, sem repetir débito. Conflito UNIQUE aborta a tentativa perdedora; a leitura do vencedor ocorre em outra transação. O endpoint nesta etapa aceita somente BET; os demais tipos seguem suas tarefas. O algoritmo, os códigos HTTP e as evidências entre três processos estão em [docs/idempotency.md](docs/idempotency.md).
+
+
+## WIN implementado — tarefa 13
+
+SubmitWager compartilha o fluxo de idempotência entre BET e WIN; ProcessWin aplica crédito com lock por wallet e valida a referência opcional à BET. Referências ausentes ou ainda pendentes ficam PENDING_REFERENCE (HTTP 202), sem crédito; o worker agendado permanece na tarefa de referências fora de ordem. Crédito, ledger e resultado participam do mesmo commit, com saldo observado persistido para replay. A capacidade máxima tem rejeição explícita BALANCE_LIMIT_EXCEEDED. Regras, arquivos e evidências estão em [docs/win.md](docs/win.md).
+
+
+## LOSS implementado — tarefa 14
+
+SubmitWager também despacha LOSS para ProcessLoss, compartilhando idempotência e transação SQL. O lock por wallet garante saldo observado consistente para replay, mas a operação não altera saldo, versão, data da wallet ou ledger. Money não negativo é informativo e continua no hash; LOSS não exige valor zero nem aceita referência externa. Regras e testes estão em [docs/loss.md](docs/loss.md).
+
+
+## REFUND implementado — tarefa 15
+
+ProcessRefund devolve integralmente uma BET PROCESSED, validando seus vínculos no domínio. A consulta de REFUND anterior ocorre sob lock por wallet; o índice parcial UNIQUE processed_reversal_once no PostgreSQL protege a unicidade final da reversão. Reenvio tem replay; outra operação sobre a mesma BET é rejeitada com REFERENCE_ALREADY_REFUNDED. Referência ausente ou BET pendente permanece PENDING_REFERENCE, sem crédito; o worker de retomada continua na etapa correspondente. Registro, crédito, ledger e saldo observado compartilham o commit. Evidências e decisões estão em [docs/refund.md](docs/refund.md).
+
+
+## ROLLBACK implementado — tarefa 16
+
+ProcessRollback inverte BET (crédito) e WIN/REFUND (débito), preservando o ledger original. O domínio valida origem PROCESSED e todos os vínculos/valor; o lock por wallet e o índice parcial de reversões garantem uma execução por referência/tipo entre processos. Débito sem saldo rejeita com REVERSAL_INSUFFICIENT_BALANCE, distinto da BET. Registro, movimento, ledger e resultado compartilham o commit. Pendências continuam sem movimentação até a etapa de reprocessamento. Regras e evidências estão em [docs/rollback.md](docs/rollback.md).

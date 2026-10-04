@@ -23,6 +23,7 @@ export enum WagerTransactionStatus {
 // Códigos estáveis permitem interpretar uma falha sem depender do texto da mensagem.
 // A aplicação usará esses códigos ao processar saldo, referências e infraestrutura.
 export enum FailureCode {
+  BalanceLimitExceeded = 'BALANCE_LIMIT_EXCEEDED',
   InsufficientBalance = 'INSUFFICIENT_BALANCE',
   ReversalInsufficientBalance = 'REVERSAL_INSUFFICIENT_BALANCE',
   ReferenceNotFound = 'REFERENCE_NOT_FOUND',

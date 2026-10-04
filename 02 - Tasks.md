@@ -410,12 +410,12 @@ Implementação:
 
 Objetivo: impedir duas instâncias de gastarem o mesmo saldo.
 
-- [ ] Definir estratégia por `walletId`
-- [ ] Implementar pessimistic locking ou estratégia equivalente
-- [ ] Não usar lock global
-- [ ] Impedir lost update
-- [ ] Permitir wallets diferentes em paralelo
-- [ ] Criar métrica de lock conflicts futuramente
+- [x] Definir estratégia por `walletId`
+- [x] Implementar pessimistic locking ou estratégia equivalente
+- [x] Não usar lock global
+- [x] Impedir lost update
+- [x] Permitir wallets diferentes em paralelo
+- [ ] Criar métrica de lock conflicts futuramente — planejada para observabilidade
 
 Cenário obrigatório:
 
@@ -432,11 +432,11 @@ BET B:
 
 Resultado obrigatório:
 
-- [ ] Exatamente 1 PROCESSED
-- [ ] Exatamente 1 REJECTED
-- [ ] Saldo final `20.00`
-- [ ] Exatamente 1 ledger DEBIT
-- [ ] Nenhum retry pode duplicar débito
+- [x] Exatamente 1 PROCESSED
+- [x] Exatamente 1 REJECTED
+- [x] Saldo final `20.00`
+- [x] Exatamente 1 ledger DEBIT
+- [x] Nenhum retry pode duplicar débito
 
 Criar teste realmente paralelo.
 
@@ -456,20 +456,20 @@ Exemplo:
 
 Implementação:
 
-- [ ] Exigir header `Idempotency-Key`
-- [ ] Definir campos de negócio usados no hash
-- [ ] Criar JSON canônico
-- [ ] Ordenar chaves
-- [ ] Calcular payload hash
-- [ ] Persistir idempotency key
-- [ ] Persistir payload hash
-- [ ] Garantir UNIQUE no PostgreSQL
-- [ ] Requisição idêntica retornar resultado original
-- [ ] Retornar `idempotentReplay: true`
-- [ ] Mesma key com payload diferente retornar conflito
-- [ ] Não executar movimentação novamente
-- [ ] Garantir funcionamento com múltiplas instâncias
-- [ ] Criar teste com múltiplas requisições simultâneas
+- [x] Exigir header `Idempotency-Key`
+- [x] Definir campos de negócio usados no hash
+- [x] Criar JSON canônico
+- [x] Ordenar chaves
+- [x] Calcular payload hash
+- [x] Persistir idempotency key
+- [x] Persistir payload hash
+- [x] Garantir UNIQUE no PostgreSQL
+- [x] Requisição idêntica retornar resultado original
+- [x] Retornar `idempotentReplay: true`
+- [x] Mesma key com payload diferente retornar conflito
+- [x] Não executar movimentação novamente
+- [x] Garantir funcionamento com múltiplas instâncias
+- [x] Criar teste com múltiplas requisições simultâneas
 
 ---
 
@@ -477,17 +477,17 @@ Implementação:
 
 Objetivo: creditar prêmio.
 
-- [ ] Implementar WIN
-- [ ] Validar wallet
-- [ ] Validar player
-- [ ] Validar moeda
-- [ ] Realizar crédito
-- [ ] Criar ledger CREDIT
-- [ ] Incrementar version
-- [ ] Marcar transaction PROCESSED
-- [ ] Permitir referência à BET quando fornecida
-- [ ] Validar referência quando fornecida
-- [ ] Criar testes
+- [x] Implementar WIN
+- [x] Validar wallet
+- [x] Validar player
+- [x] Validar moeda
+- [x] Realizar crédito
+- [x] Criar ledger CREDIT
+- [x] Incrementar version
+- [x] Marcar transaction PROCESSED
+- [x] Permitir referência à BET quando fornecida
+- [x] Validar referência quando fornecida
+- [x] Criar testes
 
 ---
 
@@ -495,12 +495,12 @@ Objetivo: creditar prêmio.
 
 Objetivo: registrar resultado sem alterar saldo.
 
-- [ ] Implementar LOSS
-- [ ] Marcar transaction PROCESSED
-- [ ] Não alterar saldo
-- [ ] Não criar ledger
-- [ ] Não incrementar version da wallet
-- [ ] Criar testes
+- [x] Implementar LOSS
+- [x] Marcar transaction PROCESSED
+- [x] Não alterar saldo
+- [x] Não criar ledger
+- [x] Não incrementar version da wallet
+- [x] Criar testes
 
 ---
 
@@ -518,21 +518,21 @@ REFUND 25:
 
 Regras:
 
-- [ ] Exigir `referenceExternalTransactionId`
-- [ ] Localizar referência por provider + externalTransactionId
-- [ ] Permitir referência somente para BET
-- [ ] Exigir referência PROCESSED
-- [ ] Validar mesmo provider
-- [ ] Validar mesmo player
-- [ ] Validar mesma wallet
-- [ ] Validar mesma moeda
-- [ ] Validar mesma rodada
-- [ ] Validar mesmo valor
-- [ ] Impedir segundo REFUND da mesma BET
-- [ ] Aplicar CREDIT
-- [ ] Criar ledger CREDIT
-- [ ] Marcar REFUND PROCESSED
-- [ ] Criar testes
+- [x] Exigir `referenceExternalTransactionId`
+- [x] Localizar referência por provider + externalTransactionId
+- [x] Permitir referência somente para BET
+- [x] Exigir referência PROCESSED
+- [x] Validar mesmo provider
+- [x] Validar mesmo player
+- [x] Validar mesma wallet
+- [x] Validar mesma moeda
+- [x] Validar mesma rodada
+- [x] Validar mesmo valor
+- [x] Impedir segundo REFUND da mesma BET
+- [x] Aplicar CREDIT
+- [x] Criar ledger CREDIT
+- [x] Marcar REFUND PROCESSED
+- [x] Criar testes
 
 ---
 
@@ -548,24 +548,24 @@ Pode referenciar:
 
 Regras:
 
-- [ ] Exigir referência
-- [ ] Buscar referência
-- [ ] Validar referência PROCESSED
-- [ ] Validar provider
-- [ ] Validar player
-- [ ] Validar wallet
-- [ ] Validar moeda
-- [ ] Validar rodada
-- [ ] Validar valor
-- [ ] Inverter direção financeira da referência
-- [ ] Se referência foi DEBIT, criar CREDIT
-- [ ] Se referência foi CREDIT, criar DEBIT
-- [ ] Impedir segundo ROLLBACK da mesma referência
-- [ ] Impedir saldo negativo
-- [ ] Criar failureCode específico para rollback sem saldo
-- [ ] Não usar o mesmo failureCode da BET sem saldo
-- [ ] Criar ledger correspondente
-- [ ] Criar testes
+- [x] Exigir referência
+- [x] Buscar referência
+- [x] Validar referência PROCESSED
+- [x] Validar provider
+- [x] Validar player
+- [x] Validar wallet
+- [x] Validar moeda
+- [x] Validar rodada
+- [x] Validar valor
+- [x] Inverter direção financeira da referência
+- [x] Se referência foi DEBIT, criar CREDIT
+- [x] Se referência foi CREDIT, criar DEBIT
+- [x] Impedir segundo ROLLBACK da mesma referência
+- [x] Impedir saldo negativo
+- [x] Criar failureCode específico para rollback sem saldo
+- [x] Não usar o mesmo failureCode da BET sem saldo
+- [x] Criar ledger correspondente
+- [x] Criar testes
 
 ---
 
