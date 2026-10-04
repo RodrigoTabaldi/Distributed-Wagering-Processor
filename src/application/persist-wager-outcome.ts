@@ -32,6 +32,15 @@ export async function enqueueWagerEvents(
   at: Date,
   balance: Money,
 ): Promise<void> {
+  session.recordAfterCommit?.({
+    type: 'transaction',
+    status: tx.status,
+    transactionId: tx.id,
+    walletId: tx.walletId,
+    providerId: tx.providerId,
+    correlationId: tx.correlationId ?? tx.id,
+    ...(tx.causationId ? { messageId: tx.causationId } : {}),
+  });
   const data: WagerEventData = {
     transactionId: tx.id,
     externalTransactionId: tx.externalTransactionId,

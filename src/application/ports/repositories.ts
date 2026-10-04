@@ -1,4 +1,5 @@
 import type { Money } from '../../domain/money.js';
+import type { TelemetryEvent } from './telemetry.js';
 import type { InboxMessage } from '../../domain/inbox-message.js';
 import type { OutboxMessage } from '../../domain/outbox-message.js';
 import type { Wallet } from '../../domain/wallet.js';
@@ -61,6 +62,8 @@ export interface LedgerRepository {
   ): Promise<LedgerPage>;
 }
 export interface RepositorySession {
+  // Publica observações somente depois do commit, descartando-as no rollback.
+  recordAfterCommit?: (event: TelemetryEvent) => void;
   wallets: WalletRepository;
   wagers: WagerRepository;
   ledger: LedgerRepository;

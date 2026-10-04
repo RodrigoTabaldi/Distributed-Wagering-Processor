@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Headers,
   Inject,
   InternalServerErrorException,
   Post,
@@ -24,10 +25,13 @@ export class WalletController {
 
   // POST responde 201 por padrão no NestJS; regras financeiras ficam no caso de uso.
   @Post()
-  async create(@Body() body: unknown): Promise<CreateWalletResult> {
+  async create(
+    @Body() body: unknown,
+    @Headers('x-correlation-id') correlationId?: string,
+  ): Promise<CreateWalletResult> {
     const input = CreateWalletDto.parse(body);
     try {
-      return await this.createWallet.execute(input);
+      return await this.createWallet.execute(input, correlationId);
     } catch (error) {
       if (error instanceof InvalidMoneyError)
         throw new BadRequestException({

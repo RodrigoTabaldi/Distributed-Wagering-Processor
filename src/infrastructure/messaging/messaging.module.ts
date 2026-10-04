@@ -10,6 +10,10 @@ import {
   type UnitOfWork,
 } from '../../application/ports/repositories.js';
 import { PublishOutbox } from '../../application/publish-outbox.js';
+import {
+  TELEMETRY,
+  type Telemetry,
+} from '../../application/ports/telemetry.js';
 import { WagerConsumer } from '../../interfaces/sqs/wager-consumer.js';
 import { DatabaseModule } from '../persistence/database.module.js';
 import { SqsConsumerWorker } from '../workers/sqs-consumer.worker.js';
@@ -25,7 +29,10 @@ class MessagingRuntime
   private client?: ReturnType<typeof createSqsClient>;
   private consumer?: SqsConsumerWorker;
   private publisher?: OutboxPublisherWorker;
-  constructor(@Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork) {}
+  constructor(
+    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
+    @Inject(TELEMETRY) private readonly telemetry: Telemetry,
+  ) {}
   async onApplicationBootstrap(): Promise<void> {
     if (process.env.MESSAGING_ENABLED !== 'true') return;
     const providers = new Set(
@@ -45,7 +52,7 @@ class MessagingRuntime
         await resolveQueues(this.client),
       );
       this.consumer = new SqsConsumerWorker(
-        new WagerConsumer(this.uow, transport, providers),
+        new WagerConsumer(this.uow, transport, providers, this.telemetry),
         transport,
       );
       this.publisher = new OutboxPublisherWorker(

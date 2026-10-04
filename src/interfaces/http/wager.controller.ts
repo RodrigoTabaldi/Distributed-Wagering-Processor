@@ -40,11 +40,16 @@ export class WagerController {
     @Body() body: unknown,
     @Headers('idempotency-key') header: unknown,
     @Res({ passthrough: true }) response: Response,
+    @Headers('x-correlation-id') correlationId?: string,
   ) {
     const { input, key } = SubmitWagerDto.parse(body, header);
     let result;
     try {
-      result = await this.submitWager.execute(input, key);
+      result = await this.submitWager.execute(
+        input,
+        key,
+        correlationId ? { correlationId } : undefined,
+      );
     } catch (error) {
       if (error instanceof IdempotencyConflictError)
         throw new ConflictException({

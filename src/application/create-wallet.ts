@@ -21,7 +21,10 @@ export interface CreateWalletResult {
 export class CreateWallet {
   constructor(private readonly unitOfWork: UnitOfWork) {}
 
-  async execute(input: CreateWalletInput): Promise<CreateWalletResult> {
+  async execute(
+    input: CreateWalletInput,
+    correlationId?: string,
+  ): Promise<CreateWalletResult> {
     // Money valida escala, moeda, sinal e limite antes de iniciar qualquer gravação.
     const initialBalance = Money.from(input.initialBalance);
     return this.unitOfWork.transaction(async (session) => {
@@ -62,6 +65,8 @@ export class CreateWallet {
           gameId: '__opening__',
           money: initialBalance,
           createdAt: at,
+          // A abertura mantém o identificador da requisição nos logs e eventos derivados.
+          correlationId,
         });
         opening.markProcessed(undefined, at);
         await wagers.create(opening, wallet.balance);

@@ -19,7 +19,15 @@ export class ProcessInboxMessage {
       const message = await session.inbox.receive(received);
       if (message.payloadHash !== received.payloadHash)
         throw new InboxPayloadConflictError();
-      if (message.isProcessed()) return 'duplicate';
+      if (message.isProcessed()) {
+        session.recordAfterCommit?.({
+          type: 'duplicate',
+          source: 'inbox',
+          messageId: props.messageId,
+          correlationId: props.messageId,
+        });
+        return 'duplicate';
+      }
       // O chamador deve usar ESTA sessão: abrir outra transação quebraria a atomicidade.
       await operation(session);
       message.markProcessed(new Date());

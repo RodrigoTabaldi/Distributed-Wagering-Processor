@@ -69,6 +69,14 @@ export class ReprocessPendingReferences {
       // Revalida o vencimento após o lock: outro worker pode ter terminado ou reagendado a operação.
       if (!schedule || schedule.nextAttemptAt > now) return 'skipped';
       const attempts = schedule.attempts + 1;
+      session.recordAfterCommit?.({
+        type: 'retry',
+        source: 'reference',
+        transactionId: tx.id,
+        walletId: tx.walletId,
+        providerId: tx.providerId,
+        correlationId: tx.correlationId ?? tx.id,
+      });
       await session.pendingReferences.reschedule(
         id,
         attempts,

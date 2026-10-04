@@ -218,6 +218,13 @@ export class SubmitWager {
       throw new StoredResultUnavailableError();
     const balance = await session.wagers.findObservedBalance(tx.id);
     if (!balance) throw new StoredResultUnavailableError();
+    session.recordAfterCommit?.({
+      type: 'duplicate',
+      source: 'idempotency',
+      transactionId: tx.id,
+      walletId: tx.walletId,
+      providerId: tx.providerId,
+    });
     return {
       transactionId: tx.id,
       status: tx.status,

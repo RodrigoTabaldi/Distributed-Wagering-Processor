@@ -1,4 +1,9 @@
 import { Logger } from '@nestjs/common';
+import {
+  NOOP_TELEMETRY,
+  type Telemetry,
+  type TraceContext,
+} from '../../application/ports/telemetry.js';
 import { ProcessInboxMessage } from '../../application/process-inbox-message.js';
 import { SubmitWager } from '../../application/submit-wager.js';
 import type { UnitOfWork } from '../../application/ports/repositories.js';
@@ -31,14 +36,23 @@ export class WagerConsumer {
     private readonly unitOfWork: UnitOfWork,
     private readonly queue: WagerQueue,
     private readonly providers: ReadonlySet<string>,
+    private readonly telemetry: Telemetry = NOOP_TELEMETRY,
   ) {}
   async handle(
     delivery: QueueDelivery,
     signal?: AbortSignal,
   ): Promise<'acknowledged' | 'retry' | 'dead-lettered'> {
     let failure: unknown;
+    const started = performance.now();
+    const context: TraceContext = { messageId: delivery.transportMessageId };
     try {
       const parsed = parseWagerEnvelope(delivery.body, this.providers);
+      Object.assign(context, {
+        messageId: parsed.messageId,
+        correlationId: parsed.messageId,
+        walletId: parsed.input.walletId,
+        providerId: parsed.input.providerId,
+      });
       await new ProcessInboxMessage(this.unitOfWork).execute(
         {
           messageId: parsed.messageId,
@@ -48,17 +62,20 @@ export class WagerConsumer {
         },
         async (session) => {
           // Mesmo SubmitWager do HTTP, com a sessão da Inbox: nenhum commit financeiro independente.
-          await new SubmitWager(this.unitOfWork).executeInTransaction(
-            session,
-            parsed.input,
-            parsed.key,
-            { correlationId: parsed.messageId, causationId: parsed.messageId },
-          );
+          const result = await new SubmitWager(
+            this.unitOfWork,
+          ).executeInTransaction(session, parsed.input, parsed.key, {
+            correlationId: parsed.messageId,
+            causationId: parsed.messageId,
+          });
+          context.transactionId = result.transactionId;
         },
         signal,
       );
     } catch (error) {
       failure = error;
+    } finally {
+      this.telemetry.duration('sqs', (performance.now() - started) / 1000);
     }
     if (failure !== undefined && signal?.aborted) {
       // Após cancelar e desfazer a transação, devolve a mensagem para outra instância.
@@ -84,6 +101,7 @@ export class WagerConsumer {
         delivery,
         permanent ? 'PERMANENT_INPUT_ERROR' : 'RETRY_LIMIT_EXCEEDED',
       );
+      this.telemetry.record({ type: 'dlq', ...context });
       await this.queue.acknowledge(delivery);
       this.logger.warn('Wager delivery moved to DLQ');
       return 'dead-lettered';
@@ -92,6 +110,7 @@ export class WagerConsumer {
       delivery,
       queueRetrySeconds(delivery.receiveCount),
     );
+    this.telemetry.record({ type: 'retry', source: 'sqs', ...context });
     this.logger.warn(
       'Wager transaction rolled back; delivery scheduled for retry',
     );

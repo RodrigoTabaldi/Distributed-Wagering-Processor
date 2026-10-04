@@ -813,18 +813,18 @@ Objetivo: encerrar aplicação sem perder mensagens.
 
 Implementar:
 
-- [ ] `GET /wallets/:walletId`
-- [ ] `GET /wallets/:walletId/ledger`
-- [ ] `GET /wagering/transactions/:transactionId`
-- [ ] `GET /providers/:providerId/wagering/transactions/:externalTransactionId`
+- [x] `GET /wallets/:walletId`
+- [x] `GET /wallets/:walletId/ledger`
+- [x] `GET /wagering/transactions/:transactionId`
+- [x] `GET /providers/:providerId/wagering/transactions/:externalTransactionId`
 
 Ledger:
 
-- [ ] Implementar `limit`
-- [ ] Implementar cursor
-- [ ] Garantir cursor estável
-- [ ] Garantir cursor opaco
-- [ ] Definir limite máximo de registros
+- [x] Implementar `limit`
+- [x] Implementar cursor
+- [x] Garantir cursor estável
+- [x] Garantir cursor opaco
+- [x] Definir limite máximo de registros
 
 ---
 
@@ -838,20 +838,20 @@ Objetivo: comparar saldo atual da wallet com saldo reconstruído pelo ledger.
 
 Implementação:
 
-- [ ] Buscar wallet
-- [ ] Buscar ledger
-- [ ] Reconstruir saldo
-- [ ] Comparar com saldo armazenado
-- [ ] Calcular difference
-- [ ] Retornar storedBalance
-- [ ] Retornar calculatedBalance
-- [ ] Retornar difference
-- [ ] Retornar consistent
-- [ ] Retornar checkedEntries
-- [ ] Não corrigir divergência automaticamente
-- [ ] Logar divergência
-- [ ] Registrar divergência em métrica
-- [ ] Criar testes
+- [x] Buscar wallet
+- [x] Buscar ledger
+- [x] Reconstruir saldo
+- [x] Comparar com saldo armazenado
+- [x] Calcular difference
+- [x] Retornar storedBalance
+- [x] Retornar calculatedBalance
+- [x] Retornar difference
+- [x] Retornar consistent
+- [x] Retornar checkedEntries
+- [x] Não corrigir divergência automaticamente
+- [x] Logar divergência
+- [x] Registrar divergência em métrica
+- [x] Criar testes
 
 ---
 
@@ -859,25 +859,25 @@ Implementação:
 
 Implementar:
 
-- [ ] `GET /health/live`
-- [ ] `GET /health/ready`
+- [x] `GET /health/live`
+- [x] `GET /health/ready`
 
 Liveness:
 
-- [ ] Verificar apenas se processo está vivo
-- [ ] Não depender de PostgreSQL
-- [ ] Não depender de SQS
+- [x] Verificar apenas se processo está vivo
+- [x] Não depender de PostgreSQL
+- [x] Não depender de SQS
 
 Readiness:
 
-- [ ] Verificar PostgreSQL
-- [ ] Verificar SQS
+- [x] Verificar PostgreSQL
+- [x] Verificar SQS
 
 Regras:
 
-- [ ] Health checks sem autenticação
-- [ ] Derrubar PostgreSQL deve afetar readiness
-- [ ] Derrubar PostgreSQL não deve necessariamente afetar liveness
+- [x] Health checks sem autenticação
+- [x] Derrubar PostgreSQL deve afetar readiness
+- [x] Derrubar PostgreSQL não deve necessariamente afetar liveness
 
 ---
 
@@ -885,25 +885,25 @@ Regras:
 
 Logs:
 
-- [ ] Configurar logs estruturados em JSON
-- [ ] Incluir correlationId
-- [ ] Incluir messageId
-- [ ] Incluir transactionId
-- [ ] Incluir walletId
-- [ ] Incluir providerId
-- [ ] Não logar payload financeiro completo
-- [ ] Não logar dados sensíveis
+- [x] Configurar logs estruturados em JSON
+- [x] Incluir correlationId
+- [x] Incluir messageId
+- [x] Incluir transactionId
+- [x] Incluir walletId
+- [x] Incluir providerId
+- [x] Não logar payload financeiro completo
+- [x] Não logar dados sensíveis
 
 Métricas:
 
-- [ ] Transações por status
-- [ ] Duplicatas detectadas
-- [ ] Retries
-- [ ] Mensagens em DLQ
-- [ ] Conflitos de lock
-- [ ] Outbox lag
-- [ ] Latência de processamento
-- [ ] Divergências de reconciliation
+- [x] Transações por status
+- [x] Duplicatas detectadas
+- [x] Retries
+- [x] Mensagens em DLQ
+- [x] Conflitos de lock
+- [x] Outbox lag
+- [x] Latência de processamento
+- [x] Divergências de reconciliation
 
 ---
 
@@ -911,48 +911,48 @@ Métricas:
 
 Money:
 
-- [ ] Soma
-- [ ] Subtração
-- [ ] Negação
-- [ ] Zero
-- [ ] Comparações
-- [ ] Igualdade
-- [ ] Valores inválidos
-- [ ] Escala
-- [ ] Notação científica
-- [ ] NaN
-- [ ] Infinity
-- [ ] Moedas diferentes
+- [x] Soma
+- [x] Subtração
+- [x] Negação
+- [x] Zero
+- [x] Comparações
+- [x] Igualdade
+- [x] Valores inválidos
+- [x] Escala
+- [x] Notação científica
+- [x] NaN
+- [x] Infinity
+- [x] Moedas diferentes
 
 Wallet:
 
-- [ ] Open
-- [ ] Credit
-- [ ] Debit
-- [ ] Saldo insuficiente
-- [ ] Currency mismatch
-- [ ] Version
+- [x] Open
+- [x] Credit
+- [x] Debit
+- [x] Saldo insuficiente
+- [x] Currency mismatch
+- [x] Version
 
 WagerTransaction:
 
-- [ ] Estados
-- [ ] Transições
-- [ ] Estados terminais
-- [ ] Referência obrigatória
-- [ ] Referência inválida
+- [x] Estados
+- [x] Transições
+- [x] Estados terminais
+- [x] Referência obrigatória
+- [x] Referência inválida
 
 Operações:
 
-- [ ] BET
-- [ ] WIN
-- [ ] LOSS
-- [ ] REFUND
-- [ ] ROLLBACK
+- [x] BET
+- [x] WIN
+- [x] LOSS
+- [x] REFUND
+- [x] ROLLBACK
 
 Idempotência:
 
-- [ ] Mesmo payload
-- [ ] Payload diferente com mesma key
+- [x] Mesmo payload
+- [x] Payload diferente com mesma key
 
 ---
 
