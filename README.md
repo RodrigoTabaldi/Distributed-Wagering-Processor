@@ -1,6 +1,24 @@
 # Digital Wallet Platform
 
-Desafio técnico de wallet para BET, WIN, LOSS, REFUND e ROLLBACK. Dinheiro usa strings (`"100.00"`), decimal.js e PostgreSQL `NUMERIC(20,2)`. Saldo deve coincidir com CREDIT menos DEBIT do ledger imutável. Stack: Bun 1.4.2, NestJS 12, TypeScript strict, MikroORM 7.2, PostgreSQL 17.6, AWS SDK/SQS e LocalStack 4.14. Versões efetivas em `bun.lock`.
+Desafio técnico de wallet para BET, WIN, LOSS, REFUND e ROLLBACK. Dinheiro usa strings (`"100.00"`), decimal.js e PostgreSQL `NUMERIC(20,2)`. Saldo deve coincidir com CREDIT menos DEBIT do ledger imutável.
+
+## Stack utilizada
+
+| Componente | Tecnologia | Uso no projeto |
+| --- | --- | --- |
+| Linguagem | TypeScript 6.0 | Modo estrito (`strict: true`) |
+| Runtime, pacotes e testes | Bun 1.4.2 | Execução da aplicação, instalação de dependências e test runner |
+| Framework | NestJS 12 | API HTTP, injeção de dependência e ciclo de vida dos workers |
+| Banco de dados | PostgreSQL 17.6 | Persistência financeira, constraints e controle de concorrência |
+| ORM | MikroORM 7.2 | Mapeamento de entidades, Unit of Work e migrations versionadas e reversíveis |
+| Mensageria | AWS SQS + AWS SDK v3 | Recebimento de operações e publicação de eventos |
+| Emulador AWS | LocalStack 4.14 | Filas SQS reais no ambiente local de desenvolvimento e testes |
+| Orquestração local | Docker Compose | PostgreSQL, LocalStack e ferramentas de observabilidade |
+| Precisão monetária | decimal.js 10.6 + `NUMERIC(20,2)` | Cálculos e persistência exatos, com valores monetários em strings |
+| Qualidade de código | Oxlint e Prettier | Análise estática e formatação |
+| Observabilidade | OpenTelemetry, Prometheus, Grafana e Jaeger | Traces, métricas e visualização; infraestrutura opcional via perfil Compose |
+
+Versões das dependências estão registradas em `bun.lock`; as imagens dos serviços estão em `docker-compose.yml`. As decisões arquiteturais estão em [03 - Architecture.md](<03 - Architecture.md>).
 
 ## Executar
 
