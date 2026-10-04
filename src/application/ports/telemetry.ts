@@ -16,6 +16,11 @@ export type TelemetryEvent = TraceContext &
     | { type: 'reconciliation_divergence' }
   );
 export interface Telemetry {
+  // Opcional: adaptadores podem medir spans sem obrigar o domínio a conhecer OpenTelemetry.
+  span?<T>(
+    name: 'sql.transaction' | 'sqs.consume',
+    operation: () => Promise<T>,
+  ): Promise<T>;
   record(event: TelemetryEvent): void;
   duration(source: 'sql' | 'sqs', seconds: number): void;
 }

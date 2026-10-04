@@ -1,13 +1,8 @@
-import {
-  Controller,
-  Get,
-  Header,
-  Inject,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Controller, Get, Header, Inject } from '@nestjs/common';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { TELEMETRY } from '../../application/ports/telemetry.js';
 import { Observability } from '../../infrastructure/observability/observability.js';
+import { infrastructureHttpError } from './infrastructure-error.js';
 
 @Controller('metrics')
 export class MetricsController {
@@ -25,8 +20,8 @@ export class MetricsController {
          FROM outbox_messages WHERE published_at IS NULL`,
       );
       return this.telemetry.metrics(Number(rows[0]?.lag ?? 0));
-    } catch {
-      throw new ServiceUnavailableException('Metrics dependency unavailable');
+    } catch (error) {
+      throw infrastructureHttpError(error, 'query metrics');
     }
   }
 }

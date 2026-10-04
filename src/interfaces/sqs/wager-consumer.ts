@@ -42,6 +42,16 @@ export class WagerConsumer {
     delivery: QueueDelivery,
     signal?: AbortSignal,
   ): Promise<'acknowledged' | 'retry' | 'dead-lettered'> {
+    // O span inclui processamento e ACK; SQL recebe um span filho no mesmo contexto assíncrono.
+    const execute = () => this.process(delivery, signal);
+    return this.telemetry.span
+      ? this.telemetry.span('sqs.consume', execute)
+      : execute();
+  }
+  private async process(
+    delivery: QueueDelivery,
+    signal?: AbortSignal,
+  ): Promise<'acknowledged' | 'retry' | 'dead-lettered'> {
     let failure: unknown;
     const started = performance.now();
     const context: TraceContext = { messageId: delivery.transportMessageId };

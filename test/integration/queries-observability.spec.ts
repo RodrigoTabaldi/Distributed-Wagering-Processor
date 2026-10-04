@@ -58,6 +58,34 @@ const bet = (wallet: { id: string; playerId: string }, amount = '10.00') => ({
 });
 
 describe('Consultas, reconciliação e observabilidade com PostgreSQL e SQS reais', () => {
+  it('publica OpenAPI com dinheiro string, idempotência e estados HTTP reais', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/openapi.json')
+      .expect(200);
+    expect(response.body.openapi).toBe('3.0.3');
+    expect(response.body.components.schemas.Money.properties.amount.type).toBe(
+      'string',
+    );
+    const operation = response.body.paths['/wagering/transactions'].post;
+    expect(operation.parameters[0]).toMatchObject({
+      name: 'Idempotency-Key',
+      in: 'header',
+      required: true,
+    });
+    expect(Object.keys(operation.responses)).toEqual([
+      '200',
+      '202',
+      '400',
+      '404',
+      '409',
+      '422',
+      '500',
+      '503',
+    ]);
+    expect(
+      response.body.components.schemas.SubmitWager.oneOf[2].required,
+    ).toContain('referenceExternalTransactionId');
+  });
   beforeAll(async () => {
     orm = await MikroORM.init({
       ...createOrmConfig('dwp_test'),

@@ -42,18 +42,22 @@ export class PostgreSqlUnitOfWork implements UnitOfWork {
     const observations: TelemetryEvent[] = [];
     const started = performance.now();
     try {
-      const result = await this.orm.em.fork().transactional(
-        (em) =>
-          operation({
-            ...this.session(em),
-            recordAfterCommit: (event) => observations.push(event),
-          }),
-        {
-          signal,
-          // SIGTERM pode cancelar uma consulta em andamento; o ORM conclui o rollback antes do retorno.
-          inflightQueryAbortStrategy: 'cancel query',
-        },
-      );
+      const execute = () =>
+        this.orm.em.fork().transactional(
+          (em) =>
+            operation({
+              ...this.session(em),
+              recordAfterCommit: (event) => observations.push(event),
+            }),
+          {
+            signal,
+            // SIGTERM pode cancelar uma consulta em andamento; o ORM conclui o rollback antes do retorno.
+            inflightQueryAbortStrategy: 'cancel query',
+          },
+        );
+      const result = await (this.telemetry.span
+        ? this.telemetry.span('sql.transaction', execute)
+        : execute());
       for (const event of observations) this.observe(event);
       return result;
     } catch (error) {

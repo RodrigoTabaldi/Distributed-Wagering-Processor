@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-10-04T06:09:23.128Z",
+  "environment": {
+    "bun": "1.4.2",
+    "os": "win32 10.0.26200",
+    "cpu": "Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz",
+    "logicalCpus": 12,
+    "memoryBytes": 17040785408,
+    "postgres": "17.6",
+    "apiInstances": 1,
+    "poolMax": 8,
+    "tracingEnabled": true,
+    "structuredLoggingEnabled": true,
+    "sqs": "LocalStack (real AWS SDK calls)"
+  },
+  "method": {
+    "warmup": 20,
+    "percentile": "nearest-rank",
+    "transport": "HTTP over loopback; real PostgreSQL and SQS",
+    "latencyIncludesResponseBody": true
+  },
+  "scenarios": [
+    {
+      "scenario": "different-wallets",
+      "requests": 100,
+      "concurrency": 8,
+      "seconds": 0.9062986000000001,
+      "successfulRequestsPerSecond": 110.33891037677868,
+      "p50Ms": 69.16339999999991,
+      "p95Ms": 95.3608999999999,
+      "p99Ms": 108.77430000000004,
+      "failures": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "same-wallet",
+      "requests": 100,
+      "concurrency": 8,
+      "seconds": 1.6523703,
+      "successfulRequestsPerSecond": 60.5191221362427,
+      "p50Ms": 126.26999999999998,
+      "p95Ms": 250.01699999999983,
+      "p99Ms": 277.2379000000001,
+      "failures": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "duplicate-burst",
+      "requests": 50,
+      "concurrency": 8,
+      "seconds": 0.15195959999999922,
+      "successfulRequestsPerSecond": 329.03482241332733,
+      "p50Ms": 19.131199999999808,
+      "p95Ms": 59.05369999999948,
+      "p99Ms": 79.01350000000002,
+      "failures": 0,
+      "errorRate": 0
+    }
+  ],
+  "uniqueProcessedDuringMeasurement": 201,
+  "duplicateReplays": 49,
+  "lockConflicts": 0,
+  "maxObservedOutboxLagSeconds": 3.921211,
+  "finalOutboxLagSeconds": 0,
+  "unpublishedEvents": 0,
+  "invariant": "All wallets non-negative and balance = SUM(CREDIT) - SUM(DEBIT); each BET has one DEBIT"
+}

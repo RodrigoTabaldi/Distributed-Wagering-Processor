@@ -1,4 +1,28 @@
 services:
+  # Ferramentas opcionais para desenvolvimento; portas acessíveis somente no computador local.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ['observability']
+    ports: ['127.0.0.1:9090:9090']
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ['observability']
+    ports: ['127.0.0.1:3001:3000']
+    environment:
+      # Acesso anônimo somente como leitor, para a demonstração local.
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+    volumes:
+      - ./docker/observability/datasources.yml:/etc/grafana/provisioning/datasources/dwp.yml:ro
+      - ./docker/observability/dashboards.yml:/etc/grafana/provisioning/dashboards/dwp.yml:ro
+      - ./docker/observability/dwp.json:/var/lib/grafana/dashboards/dwp.json:ro
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
+    profiles: ['observability']
+    ports: ['127.0.0.1:16686:16686', '127.0.0.1:4318:4318']
   messaging-test:
     image: oven/bun:1.4.2
     profiles: ['tests']

@@ -9,6 +9,8 @@ import {
   type NestMiddleware,
 } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
+import { Tracing } from './tracing.js';
+import { SpanStatusCode } from '@opentelemetry/api';
 import {
   TELEMETRY,
   type Telemetry,
@@ -35,6 +37,16 @@ const counterNames = {
 
 @Injectable()
 export class Observability implements Telemetry {
+  readonly tracing = new Tracing();
+  async onApplicationShutdown(): Promise<void> {
+    await this.tracing.shutdown();
+  }
+  span<T>(
+    name: 'sql.transaction' | 'sqs.consume',
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.tracing.span(name, operation);
+  }
   private readonly context = new AsyncLocalStorage<TraceContext>();
   private readonly counters = new Map<string, number>();
   private readonly durations = new Map<
@@ -61,6 +73,7 @@ export class Observability implements Telemetry {
     const context: Record<string, unknown> = {
       ...this.context.getStore(),
       ...event,
+      ...this.tracing.ids(),
     };
     const safe: Record<string, string> = { event: event.type };
     // Lista permitida protege até chamadas que recebam propriedades extras em runtime.
@@ -72,6 +85,8 @@ export class Observability implements Telemetry {
       'providerId',
       'status',
       'source',
+      'traceId',
+      'spanId',
     ] as const) {
       const value = context[field];
       if (typeof value === 'string') safe[field] = value.slice(0, 255);
@@ -149,7 +164,23 @@ export class CorrelationMiddleware implements NestMiddleware {
         : randomUUID();
     request.headers['x-correlation-id'] = correlationId;
     response.setHeader('x-correlation-id', correlationId);
-    this.telemetry.run({ correlationId }, next);
+    const span = this.telemetry.tracing.start('http.request', correlationId);
+    // O nome fixo evita URLs com IDs; o span termina quando a resposta termina ou é interrompida.
+    span?.setAttribute('http.request.method', request.method);
+    let ended = false;
+    const finish = () => {
+      if (ended) return;
+      ended = true;
+      span?.setAttribute('http.response.status_code', response.statusCode);
+      if (response.statusCode >= 500)
+        span?.setStatus({ code: SpanStatusCode.ERROR });
+      span?.end();
+    };
+    response.once('finish', finish);
+    response.once('close', finish);
+    this.telemetry.tracing.run(span, () =>
+      this.telemetry.run({ correlationId }, next),
+    );
   }
 }
 @Global()

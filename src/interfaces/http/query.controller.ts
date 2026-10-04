@@ -4,13 +4,11 @@ import {
   Get,
   HttpCode,
   Inject,
-  InternalServerErrorException,
   NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
   Query,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   QueryNotFoundError,
@@ -18,6 +16,7 @@ import {
   ReconcileWallet,
 } from '../../application/query-wallets.js';
 import { InvalidLedgerPageError } from '../../application/ports/repositories.js';
+import { infrastructureHttpError } from './infrastructure-error.js';
 
 @Controller()
 export class QueryController {
@@ -88,29 +87,7 @@ export class QueryController {
         throw new NotFoundException('Resource not found');
       if (error instanceof InvalidLedgerPageError)
         throw new BadRequestException('Invalid ledger cursor or limit');
-      const code =
-        error && typeof error === 'object' && 'code' in error
-          ? error.code
-          : undefined;
-      if (
-        typeof code === 'string' &&
-        (code.startsWith('08') ||
-          [
-            'ECONNREFUSED',
-            'ECONNRESET',
-            'ETIMEDOUT',
-            '53300',
-            '57P01',
-            '57P02',
-            '57P03',
-            '40001',
-            '40P01',
-            '55P03',
-          ].includes(code))
-      )
-        throw new ServiceUnavailableException('Unable to query resource');
-      // Diferencia defeito inesperado de indisponibilidade sem transmitir SQL ou dados sensíveis.
-      throw new InternalServerErrorException('Unable to query resource');
+      throw infrastructureHttpError(error, 'query resource');
     }
   }
 }

@@ -5,8 +5,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { DependencyHealth } from '../../infrastructure/health/dependency-health.js';
+import { Public } from './auth.module.js';
 
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(
     @Inject(DependencyHealth)
@@ -24,7 +26,11 @@ export class HealthController {
       status: checks.postgres && checks.sqs ? 'up' : 'down',
       checks,
     };
-    if (body.status === 'down') throw new ServiceUnavailableException(body);
+    if (body.status === 'down')
+      throw new ServiceUnavailableException({
+        ...body,
+        code: 'INFRASTRUCTURE_UNAVAILABLE',
+      });
     return body;
   }
 }

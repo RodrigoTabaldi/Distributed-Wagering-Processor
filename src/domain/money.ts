@@ -29,7 +29,7 @@ export class CurrencyMismatchError extends Error {
 
 const MoneyDecimal = Decimal.clone({ precision: 21 });
 
-// Limite  para a coluna monetária no PostgreSQL; ainda não há migration.
+// Limite da coluna NUMERIC(20,2), também definido nas migrations do PostgreSQL.
 const maximumAmount = new MoneyDecimal('999999999999999999.99');
 
 // Obtém os códigos de moeda reconhecidos pelo runtime, como BRL, USD e EUR.
@@ -97,7 +97,7 @@ export class Money {
   }
 
   // Subtrai e retorna um novo Money. Um resultado negativo é útil na reconciliação;
-  // impedir saldo negativo será responsabilidade da Wallet.
+  // impedir saldo negativo é responsabilidade da Wallet.
   subtract(other: Money): Money {
     this.assertSameCurrency(other);
     return new Money(this.#value.minus(other.#value), this.currency);

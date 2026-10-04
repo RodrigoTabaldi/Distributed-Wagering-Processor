@@ -960,21 +960,21 @@ Idempotência:
 
 Usar PostgreSQL real e LocalStack/MiniStack real em containers.
 
-- [ ] Executar migrations
-- [ ] Reverter migrations
-- [ ] Testar constraints
-- [ ] Testar persistência da wallet
-- [ ] Testar persistência do ledger
-- [ ] Testar persistência das transactions
-- [ ] Testar atomicidade wallet + ledger
-- [ ] Testar atomicidade wager + wallet + ledger
-- [ ] Testar atomicidade inbox + operação financeira
-- [ ] Testar atomicidade outbox + operação financeira
-- [ ] Testar redelivery
-- [ ] Testar dois publishers
-- [ ] Testar retry
-- [ ] Testar DLQ
-- [ ] Testar recuperação após restart
+- [x] Executar migrations
+- [x] Reverter migrations
+- [x] Testar constraints
+- [x] Testar persistência da wallet
+- [x] Testar persistência do ledger
+- [x] Testar persistência das transactions
+- [x] Testar atomicidade wallet + ledger
+- [x] Testar atomicidade wager + wallet + ledger
+- [x] Testar atomicidade inbox + operação financeira
+- [x] Testar atomicidade outbox + operação financeira
+- [x] Testar redelivery
+- [x] Testar dois publishers
+- [x] Testar retry
+- [x] Testar DLQ
+- [x] Testar recuperação após restart
 
 ---
 
@@ -984,9 +984,9 @@ Cenário 1:
 
 Mesma BET enviada 50 vezes em paralelo.
 
-- [ ] Apenas um efeito financeiro
-- [ ] Apenas um débito
-- [ ] Replays não alteram saldo
+- [x] Apenas um efeito financeiro
+- [x] Apenas um débito
+- [x] Replays não alteram saldo
 
 Cenário 2:
 
@@ -999,42 +999,42 @@ BET A:
 BET B:
 `80.00`
 
-- [ ] Uma PROCESSED
-- [ ] Uma REJECTED
-- [ ] Saldo final `20.00`
-- [ ] Um ledger DEBIT
+- [x] Uma PROCESSED
+- [x] Uma REJECTED
+- [x] Saldo final `20.00`
+- [x] Um ledger DEBIT
 
 Cenário 3:
 
-- [ ] Wallets diferentes processadas em paralelo
-- [ ] Uma wallet não bloquear outra
+- [x] Wallets diferentes processadas em paralelo
+- [x] Uma wallet não bloquear outra
 
 Cenário 4:
 
-- [ ] Rodar pelo menos 3 instâncias/processos simultaneamente
+- [x] Rodar pelo menos 3 instâncias/processos simultaneamente
 
 Cenário 5:
 
-- [ ] Matar worker após commit e antes do ACK
-- [ ] Garantir redelivery
-- [ ] Garantir ausência de duplicação
+- [x] Matar worker após commit e antes do ACK
+- [x] Garantir redelivery
+- [x] Garantir ausência de duplicação
 
 Cenário 6:
 
-- [ ] Dois publishers sobre a mesma Outbox
+- [x] Dois publishers sobre a mesma Outbox
 
 Cenário 7:
 
-- [ ] REFUND entregue antes da BET
+- [x] REFUND entregue antes da BET
 
 Cenário 8:
 
-- [ ] ROLLBACK entregue antes da referência
+- [x] ROLLBACK entregue antes da referência
 
 Cenário 9:
 
-- [ ] Reiniciar serviço durante processamento
-- [ ] Confirmar consistência final
+- [x] Reiniciar serviço durante processamento
+- [x] Confirmar consistência final
 
 Invariante final:
 
@@ -1046,13 +1046,13 @@ Invariante final:
 
 Objetivo: deixar claro para o provider o que aconteceu.
 
-- [ ] Definir status para payload inválido
-- [ ] Definir status para conflito de idempotência
-- [ ] Definir status para rejeição de negócio
-- [ ] Definir status para processamento pendente
-- [ ] Definir status para falha transitória de infraestrutura
-- [ ] Usar padrão consistente entre endpoints
-- [ ] Documentar decisões
+- [x] Definir status para payload inválido
+- [x] Definir status para conflito de idempotência
+- [x] Definir status para rejeição de negócio
+- [x] Definir status para processamento pendente
+- [x] Definir status para falha transitória de infraestrutura
+- [x] Usar padrão consistente entre endpoints
+- [x] Documentar decisões
 
 ---
 
@@ -1060,14 +1060,14 @@ Objetivo: deixar claro para o provider o que aconteceu.
 
 Autenticação não é prioridade principal neste desafio.
 
-- [ ] Decidir se será implementada
-- [ ] Se não implementar, deixar ponto de extensão claro
-- [ ] Documentar abordagem futura
-- [ ] Considerar OIDC
-- [ ] Considerar Keycloak ou Zitadel
-- [ ] Não criar autenticação artesanal
-- [ ] Não criar tabela própria de usuário/senha
-- [ ] Manter health checks públicos
+- [x] Decidir se será implementada
+- [x] Se não implementar, deixar ponto de extensão claro
+- [x] Documentar abordagem futura
+- [x] Considerar OIDC
+- [x] Considerar Keycloak ou Zitadel
+- [x] Não criar autenticação artesanal
+- [x] Não criar tabela própria de usuário/senha
+- [x] Manter health checks públicos
 
 ---
 
@@ -1075,42 +1075,42 @@ Autenticação não é prioridade principal neste desafio.
 
 README.md:
 
-- [ ] Explicar objetivo
-- [ ] Explicar stack
-- [ ] Explicar requisitos
-- [ ] Explicar instalação
-- [ ] Explicar como executar
-- [ ] Explicar Docker Compose
-- [ ] Explicar migrations
-- [ ] Explicar testes
-- [ ] Explicar endpoints
-- [ ] Adicionar exemplos de requests
-- [ ] Explicar filas
-- [ ] Explicar health checks
+- [x] Explicar objetivo
+- [x] Explicar stack
+- [x] Explicar requisitos
+- [x] Explicar instalação
+- [x] Explicar como executar
+- [x] Explicar Docker Compose
+- [x] Explicar migrations
+- [x] Explicar testes
+- [x] Explicar endpoints
+- [x] Adicionar exemplos de requests
+- [x] Explicar filas
+- [x] Explicar health checks
 
 Architecture.md:
 
-- [ ] Documentar escolha do MikroORM
-- [ ] Documentar representação de Money
-- [ ] Documentar persistência de Money
-- [ ] Documentar transações SQL
-- [ ] Documentar locking
-- [ ] Documentar concorrência
-- [ ] Documentar idempotência
-- [ ] Documentar canonical JSON
-- [ ] Documentar payload hash
-- [ ] Documentar Inbox
-- [ ] Documentar Outbox
-- [ ] Documentar SQS
-- [ ] Documentar retry
-- [ ] Documentar DLQ
-- [ ] Documentar Pending Reference
-- [ ] Documentar graceful shutdown
-- [ ] Documentar autenticação
-- [ ] Documentar HTTP status
-- [ ] Documentar constraints
-- [ ] Documentar trade-offs
-- [ ] Documentar limitações
+- [x] Documentar escolha do MikroORM
+- [x] Documentar representação de Money
+- [x] Documentar persistência de Money
+- [x] Documentar transações SQL
+- [x] Documentar locking
+- [x] Documentar concorrência
+- [x] Documentar idempotência
+- [x] Documentar canonical JSON
+- [x] Documentar payload hash
+- [x] Documentar Inbox
+- [x] Documentar Outbox
+- [x] Documentar SQS
+- [x] Documentar retry
+- [x] Documentar DLQ
+- [x] Documentar Pending Reference
+- [x] Documentar graceful shutdown
+- [x] Documentar autenticação
+- [x] Documentar HTTP status
+- [x] Documentar constraints
+- [x] Documentar trade-offs
+- [x] Documentar limitações
 
 ---
 
@@ -1118,36 +1118,39 @@ Architecture.md:
 
 Verificar manualmente antes da entrega:
 
-- [ ] Nenhum valor monetário usa `number`
-- [ ] Nenhum valor monetário usa float
-- [ ] Nenhum valor monetário usa double
-- [ ] Saldo nunca pode ficar negativo
-- [ ] Race condition não pode causar saldo inválido
-- [ ] Nenhum débito pode ser duplicado
-- [ ] Nenhum crédito pode ser duplicado
-- [ ] Idempotência é persistente
-- [ ] Idempotência não depende de memória
-- [ ] Sistema funciona com múltiplas instâncias
-- [ ] Ledger é auditável
-- [ ] Ledger é imutável
-- [ ] Ledger não é apagado
-- [ ] Ledger não é sobrescrito
-- [ ] Evento nunca é publicado antes do commit
-- [ ] PostgreSQL real é usado nos testes relevantes
-- [ ] SQS real via LocalStack/MiniStack é usado nos testes relevantes
-- [ ] Migrations funcionam
-- [ ] Migrations podem ser revertidas
-- [ ] Todos os testes passam
-- [ ] README está atualizado
-- [ ] Architecture.md está atualizado
+- [x] Nenhum valor monetário usa `number`
+- [x] Nenhum valor monetário usa float
+- [x] Nenhum valor monetário usa double
+- [x] Saldo nunca pode ficar negativo
+- [x] Race condition não pode causar saldo inválido
+- [x] Nenhum débito pode ser duplicado
+- [x] Nenhum crédito pode ser duplicado
+- [x] Idempotência é persistente
+- [x] Idempotência não depende de memória
+- [x] Sistema funciona com múltiplas instâncias
+- [x] Ledger é auditável
+- [x] Ledger é imutável
+- [x] Ledger não é apagado
+- [x] Ledger não é sobrescrito
+- [x] Evento nunca é publicado antes do commit
+- [x] PostgreSQL real é usado nos testes relevantes
+- [x] SQS real via LocalStack/MiniStack é usado nos testes relevantes
+- [x] Migrations funcionam
+- [x] Migrations podem ser revertidas
+- [x] Todos os testes passam
+- [x] README está atualizado
+- [x] Architecture.md está atualizado
 
 ---
 
 ## 37 — Preparação para Apresentação
 
+Material preparado em `docs/presentation.md`, com explicações, decisões, trade-offs e testes. Os itens abaixo permanecem como autoavaliação do candidato: produzir o roteiro não comprova que ele já domina a explicação oral.
+
 Conseguir explicar:
 
 NestJS:
+
 - Controller
 - Service
 - Provider
@@ -1155,6 +1158,7 @@ NestJS:
 - Dependency Injection
 
 PostgreSQL:
+
 - transaction
 - migration
 - constraint
@@ -1164,6 +1168,7 @@ PostgreSQL:
 - lock
 
 Financeiro:
+
 - Money
 - Wallet
 - Ledger
@@ -1172,6 +1177,7 @@ Financeiro:
 - reconciliation
 
 Concorrência:
+
 - race condition
 - lost update
 - pessimistic lock
@@ -1179,6 +1185,7 @@ Concorrência:
 - `FOR UPDATE`
 
 Sistemas distribuídos:
+
 - at-least-once
 - idempotência
 - Inbox
@@ -1190,6 +1197,7 @@ Sistemas distribuídos:
 - graceful shutdown
 
 SQS:
+
 - producer
 - consumer
 - message
@@ -1212,16 +1220,18 @@ Para cada decisão importante conseguir responder:
 
 Fazer somente depois dos requisitos obrigatórios.
 
-- [ ] Swagger / OpenAPI
-- [ ] OpenTelemetry
-- [ ] Dashboard de métricas
+OpenAPI, tracing, dashboard e carga implementados e verificados. Partidas dobradas ficam como evolução opcional documentada em `ARCHITECTURE.md`; não fazem parte da funcionalidade entregue.
+
+- [x] Swagger / OpenAPI
+- [x] OpenTelemetry
+- [x] Dashboard de métricas
 - [ ] Double-entry bookkeeping
-- [ ] Teste de carga
-- [ ] Criar `bun run test:load`
-- [ ] Medir throughput
-- [ ] Medir p50
-- [ ] Medir p95
-- [ ] Medir p99
-- [ ] Medir taxa de erro
-- [ ] Medir conflitos de concorrência
-- [ ] Medir outbox lag
+- [x] Teste de carga
+- [x] Criar `bun run test:load`
+- [x] Medir throughput
+- [x] Medir p50
+- [x] Medir p95
+- [x] Medir p99
+- [x] Medir taxa de erro
+- [x] Medir conflitos de concorrência
+- [x] Medir outbox lag

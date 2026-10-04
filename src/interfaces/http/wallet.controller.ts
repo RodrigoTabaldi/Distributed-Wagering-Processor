@@ -5,9 +5,7 @@ import {
   Controller,
   Headers,
   Inject,
-  InternalServerErrorException,
   Post,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   CreateWallet,
@@ -16,6 +14,7 @@ import {
 import { WalletAlreadyExistsError } from '../../application/errors.js';
 import { InvalidMoneyError } from '../../domain/money.js';
 import { CreateWalletDto } from './create-wallet.dto.js';
+import { infrastructureHttpError } from './infrastructure-error.js';
 
 @Controller('wallets')
 export class WalletController {
@@ -43,37 +42,7 @@ export class WalletController {
           code: 'WALLET_ALREADY_EXISTS',
           message: error.message,
         });
-      // Uma indisponibilidade transitória não deve parecer rejeição de negócio.
-      const code =
-        error && typeof error === 'object' && 'code' in error
-          ? error.code
-          : undefined;
-      if (
-        typeof code === 'string' &&
-        (code.startsWith('08') ||
-          [
-            'ECONNREFUSED',
-            'ECONNRESET',
-            'ETIMEDOUT',
-            '53300',
-            '57P01',
-            '57P02',
-            '57P03',
-            '40001',
-            '40P01',
-            '55P03',
-          ].includes(code))
-      ) {
-        throw new ServiceUnavailableException({
-          code: 'INFRASTRUCTURE_UNAVAILABLE',
-          message: 'Temporarily unable to create wallet',
-        });
-      }
-      // Não expõe SQL, credenciais ou payload financeiro no erro HTTP ou log padrão.
-      throw new InternalServerErrorException({
-        code: 'INTERNAL_ERROR',
-        message: 'Unable to create wallet',
-      });
+      throw infrastructureHttpError(error, 'create wallet');
     }
   }
 }

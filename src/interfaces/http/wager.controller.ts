@@ -6,10 +6,8 @@ import {
   Headers,
   HttpCode,
   Inject,
-  InternalServerErrorException,
   Post,
   Res,
-  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
@@ -29,6 +27,7 @@ import {
   InvalidWagerTransactionError,
 } from '../../domain/wager-transaction.js';
 import { SubmitWagerDto } from './submit-wager.dto.js';
+import { infrastructureHttpError } from './infrastructure-error.js';
 
 @Controller('wagering/transactions')
 export class WagerController {
@@ -77,36 +76,11 @@ export class WagerController {
           code: error.reason,
           message: 'Invalid wagering request',
         });
-      const code =
-        error && typeof error === 'object' && 'code' in error
-          ? error.code
-          : undefined;
-      if (
-        error instanceof StoredResultUnavailableError ||
-        (typeof code === 'string' &&
-          (code.startsWith('08') ||
-            [
-              'ECONNREFUSED',
-              'ECONNRESET',
-              'ETIMEDOUT',
-              '53300',
-              '57P01',
-              '57P02',
-              '57P03',
-              '40001',
-              '40P01',
-              '55P03',
-            ].includes(code)))
-      )
-        throw new ServiceUnavailableException({
-          code: 'INFRASTRUCTURE_UNAVAILABLE',
-          message: 'Temporarily unable to submit transaction',
-        });
-      // Falha inesperada não revela SQL, payload ou credenciais ao cliente.
-      throw new InternalServerErrorException({
-        code: 'INTERNAL_ERROR',
-        message: 'Unable to submit transaction',
-      });
+      throw infrastructureHttpError(
+        error,
+        'submit transaction',
+        error instanceof StoredResultUnavailableError,
+      );
     }
     // 422 diferencia rejeição financeira de payload inválido e de conflito de idempotência.
     if (result.status === WagerTransactionStatus.Rejected)

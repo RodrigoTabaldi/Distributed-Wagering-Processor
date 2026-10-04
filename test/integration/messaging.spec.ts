@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { assertFinancialConsistency } from '../helpers/financial-consistency.js';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { fork, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -236,9 +237,14 @@ describe('SQS, Inbox, events, Outbox and recovery', () => {
       client?.destroy();
       if (orm) {
         try {
-          await orm.migrator.down({ schema, to: 0 });
-          await sql(`DROP TABLE "${schema}".mikro_orm_migrations`);
-          await sql(`DROP SCHEMA "${schema}" RESTRICT`);
+          // Cada cenário de retry/crash precisa terminar reconciliado antes de limpar a fixture.
+          try {
+            await assertFinancialConsistency(orm);
+          } finally {
+            await orm.migrator.down({ schema, to: 0 });
+            await sql(`DROP TABLE "${schema}".mikro_orm_migrations`);
+            await sql(`DROP SCHEMA "${schema}" RESTRICT`);
+          }
         } finally {
           await orm.close();
         }

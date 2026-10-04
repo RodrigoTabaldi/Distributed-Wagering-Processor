@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
+import { assertFinancialConsistency } from '../helpers/financial-consistency.js';
 import { fork, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -365,7 +366,13 @@ describe('Wallet concurrency across Bun processes', () => {
     );
   });
   afterAll(async () => {
-    if (orm) await orm.close();
+    if (orm) {
+      try {
+        await assertFinancialConsistency(orm);
+      } finally {
+        await orm.close();
+      }
+    }
   });
 
   it('serializes two competing bets while a third process completes a different wallet', async () => {

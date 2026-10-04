@@ -19,10 +19,16 @@ import { DependencyHealth } from '../../infrastructure/health/dependency-health.
 import { QueryController } from './query.controller.js';
 import { HealthController } from './health.controller.js';
 import { MetricsController } from './metrics.controller.js';
+import { DocsController } from './docs.controller.js';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [QueryController, HealthController, MetricsController],
+  controllers: [
+    QueryController,
+    HealthController,
+    MetricsController,
+    DocsController,
+  ],
   providers: [
     DependencyHealth,
     {
