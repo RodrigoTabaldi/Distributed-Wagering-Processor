@@ -1,6 +1,10 @@
 # Digital Wallet Platform
 
-Desafio técnico de wallet para BET, WIN, LOSS, REFUND e ROLLBACK. Dinheiro usa strings (`"100.00"`), decimal.js e PostgreSQL `NUMERIC(20,2)`. Saldo deve coincidir com CREDIT menos DEBIT do ledger imutável.
+Este projeto foi desenvolvido para o desafio técnico de backend da Jungle Gaming. Ele recebe operações de apostas por HTTP ou SQS e processa BET, WIN, LOSS, REFUND e ROLLBACK.
+
+O foco é manter o saldo correto mesmo quando uma mensagem chega repetida, fora de ordem ou ao mesmo tempo que outra operação. Cada movimentação fica registrada em um ledger imutável, ou seja, um histórico financeiro que não pode ser alterado ou apagado. O saldo da wallet precisa corresponder à soma dos créditos menos os débitos desse histórico.
+
+Os valores monetários entram e saem como strings, como `"100.00"`. Os cálculos usam decimal.js e a persistência usa PostgreSQL `NUMERIC(20,2)`, para preservar a precisão do dinheiro.
 
 ## Stack utilizada
 
@@ -20,16 +24,18 @@ Desafio técnico de wallet para BET, WIN, LOSS, REFUND e ROLLBACK. Dinheiro usa 
 
 Versões das dependências estão registradas em `bun.lock`; as imagens dos serviços estão em `docker-compose.yml`. As decisões arquiteturais estão em [03 - Architecture.md](<03 - Architecture.md>).
 
-## Executar
+## Como executar localmente
 
-Pré-requisitos: Bun e Docker Desktop em execução com containers Linux; portas 3000, 55432 e 4566 livres. Na raiz:
+Para começar, tenha o Bun instalado e o Docker Desktop em execução com containers Linux. As portas 3000, 55432 e 4566 precisam estar livres. Na raiz do projeto, instale as dependências e copie o arquivo de configuração:
 
 ```powershell
 bun install --frozen-lockfile
 Copy-Item .env.example .env
 ```
 
-Edite **DB_PASSWORD** em `.env` com uma senha local; não versione esse arquivo. Bun/Compose carregam `.env`.
+Defina uma senha local em **DB_PASSWORD**, no arquivo `.env`. Esse arquivo não deve ser versionado; o Bun e o Docker Compose carregam suas configurações automaticamente.
+
+Depois, inicie o banco e o LocalStack, aplique as migrations, crie as filas e execute a aplicação:
 
 ```powershell
 bun run infra:up
@@ -38,20 +44,28 @@ bun run sqs:setup
 bun run start:dev
 ```
 
-`infra:up` inicia banco/emulador com healthchecks. O PostgreSQL cria `dwp_test` na inicialização do volume; um volume antigo sem esse banco exige criá-lo explicitamente antes da integração. O servidor não executa migrations automaticamente. `db:pending` consulta pendências; `db:rollback` é destrutivo e deve ser usado apenas em fixtures descartáveis, nunca para apagar ledger de produção.
+O comando `infra:up` aguarda o banco e o LocalStack ficarem disponíveis. As migrations são aplicadas explicitamente, sem execução automática ao iniciar o servidor. Para consultar migrations pendentes, use `bun run db:pending`.
 
-Variáveis: `DB_HOST/PORT/USER/PASSWORD/NAME`; `MESSAGING_ENABLED=true` ativa workers; `SQS_ENDPOINT`, `AWS_REGION`, `SQS_ALLOWED_PROVIDERS=provider-a` configuram mensageria; `PORT` altera 3000. Credenciais fictícias são usadas somente para o endpoint loopback do emulador; AWS usa a cadeia padrão de credenciais.
+O banco `dwp_test` é criado na primeira inicialização do volume PostgreSQL. Se você estiver reutilizando um volume antigo que não contém esse banco, será necessário criá-lo antes de rodar os testes de integração. O comando `db:rollback` pode remover dados e deve ser usado somente em ambientes descartáveis de teste.
+
+As variáveis `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME` configuram o banco. `MESSAGING_ENABLED=true` ativa os workers; `SQS_ENDPOINT`, `AWS_REGION` e `SQS_ALLOWED_PROVIDERS` configuram as filas e os provedores aceitos. A aplicação usa a porta 3000 por padrão, ajustável com `PORT`.
+
+As credenciais fictícias são usadas apenas no emulador local. Para acessar a AWS, o SDK utiliza sua cadeia padrão de credenciais.
+
+Para executar a versão compilada:
 
 ```powershell
 bun run build
 bun run start:prod
 ```
 
-O entrypoint compilado é `dist/main.js`, conforme `rootDir: src` em `tsconfig.build.json`.
+O build gera o arquivo de entrada `dist/main.js`, usado pelo comando `start:prod`.
 
 ## API
 
-`GET /openapi.json` publica OpenAPI 3.0.3, importável no Postman/Swagger Editor. **A demonstração não autentica usuários/provedores.** Veja a decisão e a extensão OIDC em [03 - Architecture.md](<03 - Architecture.md>).
+O contrato da API está disponível em `GET /openapi.json`, no formato OpenAPI 3.0.3, e pode ser importado no Postman ou Swagger Editor.
+
+A autenticação foi deixada fora desta demonstração, conforme permitido pelo desafio. O ponto de extensão e o desenho de uma integração com um provedor de identidade estão descritos em [03 - Architecture.md](<03 - Architecture.md>).
 
 | Método | Endpoint                                                              | Finalidade                                                             |
 | ------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -66,7 +80,7 @@ O entrypoint compilado é `dist/main.js`, conforme `rootDir: src` em `tsconfig.b
 | GET    | `/health/ready`                                                       | Banco e três filas disponíveis; caso contrário 503                     |
 | GET    | `/metrics`                                                            | Prometheus; sem saldo/payload nos labels                               |
 
-Exemplo PowerShell:
+O exemplo abaixo cria uma wallet com `100.00 BRL`, aposta `25.00 BRL` e repete a mesma requisição para verificar a idempotência:
 
 ```powershell
 $wallet = Invoke-RestMethod -Method Post -Uri http://localhost:3000/wallets -ContentType 'application/json' -Body (@{
@@ -90,7 +104,11 @@ Invoke-RestMethod -Uri "http://localhost:3000/wallets/$($wallet.id)"
 Invoke-RestMethod -Method Post -Uri "http://localhost:3000/wallets/$($wallet.id)/reconciliation"
 ```
 
-Replay mantém saldo `75.00`, versão 2 e apenas um DEBIT. WIN credita; LOSS só registra resultado; REFUND devolve BET; ROLLBACK inverte BET/WIN/REFUND. Reversões exigem referência e igual valor/provider/player/wallet/moeda/rodada. Depois de timeout, repita com **a mesma chave**.
+Ao repetir a requisição, o saldo continua em `75.00`, a versão permanece em 2 e existe apenas um débito no ledger. A resposta identifica a repetição com `idempotentReplay: true`. Se ocorrer um timeout, envie novamente **a mesma chave e o mesmo payload**; isso permite recuperar o resultado sem repetir o efeito financeiro.
+
+WIN credita a wallet; LOSS registra o resultado sem movimentar saldo; REFUND devolve o valor de uma BET; ROLLBACK inverte uma BET, WIN ou REFUND. As reversões exigem uma referência válida, com o mesmo valor, provedor, jogador, wallet, moeda e rodada.
+
+Os códigos HTTP ajudam o provedor a distinguir uma entrada inválida, uma rejeição de negócio e uma falha de infraestrutura:
 
 | Status | Significado                                                      |
 | ------ | ---------------------------------------------------------------- |
@@ -105,9 +123,17 @@ Replay mantém saldo `75.00`, versão 2 e apenas um DEBIT. WIN credita; LOSS só
 | 502    | Falha técnica terminal persistida como FAILED; não repetir automaticamente |
 | 500    | Erro inesperado sem revelar detalhes do driver                   |
 
-## SQS e testes
+## Como as mensagens são processadas
 
-Filas: `wager-transactions.fifo`, `wager-transactions-dlq.fifo`, `wager-events.fifo`. Entrada agrupada por wallet; envelope validado em `src/interfaces/sqs/wager-envelope.ts`. Consumer usa Inbox e o mesmo caso de uso do HTTP, confirmando ACK após commit. Outbox publica eventos versionados somente depois do commit; consumidores externos precisam deduplicar eventId. Retry/DLQ/Pending Reference/shutdown: [03 - Architecture.md](<03 - Architecture.md>).
+O projeto utiliza três filas: `wager-transactions.fifo` recebe operações, `wager-transactions-dlq.fifo` recebe mensagens que precisam de tratamento posterior e `wager-events.fifo` recebe os eventos de integração.
+
+O consumer valida a mensagem e chama o mesmo caso de uso utilizado pelo HTTP. A Inbox registra as mensagens recebidas para impedir efeitos duplicados, e o ACK — confirmação de consumo — só ocorre depois do commit no banco. A Outbox guarda os eventos junto com o resultado financeiro e permite publicá-los depois, mesmo se o processo reiniciar. Como uma publicação pode se repetir, os consumidores externos precisam deduplicar pelo `eventId`.
+
+As políticas de retry, referências fora de ordem e encerramento dos workers estão explicadas em [03 - Architecture.md](<03 - Architecture.md>).
+
+## Como verificar o projeto
+
+Com o PostgreSQL e o LocalStack em execução, rode os testes e as verificações de código:
 
 ```powershell
 bun run test
@@ -121,9 +147,15 @@ bun run build
 docker compose run --rm --no-deps messaging-test
 ```
 
-Integração usa PostgreSQL/SQS reais via LocalStack, schemas/filas próprios quando necessário e três processos Bun. O teste de indisponibilidade cria/encerra um container PostgreSQL próprio. Não aponte `dwp_test` para produção. Critérios/evidências: [docs/evaluation.md](docs/evaluation.md). Estudo/apresentação: [docs/presentation.md](docs/presentation.md). A documentação segue a ordem: [01 - Challenge.md](<01 - Challenge.md>), [02 - Tasks.md](<02 - Tasks.md>) e [03 - Architecture.md](<03 - Architecture.md>). O documento 03 corresponde ao ARCHITECTURE.md solicitado no enunciado e descreve a implementação atual.
+Os testes de integração usam PostgreSQL e SQS via LocalStack em containers reais. Eles verificam concorrência com três processos Bun, mensagens repetidas, falhas e recuperação. Quando necessário, criam schemas e filas próprios; o teste de indisponibilidade também cria e encerra um container PostgreSQL separado. Use um banco de testes descartável, nunca um banco de produção.
 
-## Extras opcionais
+As evidências das verificações estão em [docs/evaluation.md](docs/evaluation.md). Para entender as decisões e preparar a apresentação, consulte [docs/presentation.md](docs/presentation.md).
+
+A documentação principal segue esta ordem: [01 - Challenge.md](<01 - Challenge.md>), [02 - Tasks.md](<02 - Tasks.md>) e [03 - Architecture.md](<03 - Architecture.md>). O documento 03 reúne o conteúdo de arquitetura solicitado no enunciado como `ARCHITECTURE.md`.
+
+## Observabilidade e testes de carga
+
+Para acompanhar métricas e traces localmente, inicie as ferramentas de observabilidade e habilite o tracing:
 
 ```powershell
 bun run observability:up
@@ -131,9 +163,11 @@ $env:OTEL_ENABLED = 'true'
 bun run start
 ```
 
-Grafana: http://localhost:3001/d/dwp ; Prometheus: http://localhost:9090 ; Jaeger: http://localhost:16686 . Provisionamento automático, leitura anônima local e dados efêmeros. Prometheus coleta a API do host na porta 3000 a cada 5s; outra porta exige ajustar `docker/observability/prometheus.yml`.
+Depois de iniciar os serviços, acesse o Grafana em http://localhost:3001/d/dwp, o Prometheus em http://localhost:9090 e o Jaeger em http://localhost:16686. As ferramentas são configuradas automaticamente para uso local, com leitura anônima e dados efêmeros. O Prometheus coleta métricas da API na porta 3000 a cada 5 segundos; se mudar essa porta, ajuste `docker/observability/prometheus.yml`.
 
-Tracing fica desativado por padrão; exporta HTTP, SQL transaction e SQS consume via OTLP HTTP para `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. SQL é filho local de HTTP/SQS; **não há propagação W3C entre serviços/filas**. Não coleta bodies/SQL/dinheiro. Referência: [exportadores oficiais OpenTelemetry](https://opentelemetry.io/docs/languages/js/exporters/).
+O tracing fica desativado por padrão. Quando habilitado, registra requisições HTTP, transações SQL e consumo SQS, exportando para `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` via OTLP HTTP. As operações SQL são associadas ao fluxo HTTP ou SQS dentro do processo, mas ainda não há propagação W3C entre serviços e filas. Os traces não coletam corpos de requisição, texto SQL ou valores monetários. Referência: [exportadores oficiais OpenTelemetry](https://opentelemetry.io/docs/languages/js/exporters/).
+
+Para executar o teste de carga:
 
 ```powershell
 bun run test:load
@@ -143,13 +177,19 @@ $env:LOAD_CONCURRENCY = '16'
 bun run test:load
 ```
 
-Carga cria API isolada em porta aleatória, schema `load_test_*` em `dwp_test` e filas próprias; usa publisher SQS real em paralelo. Mede wallets diferentes, mesma wallet e 50 duplicatas. [docs/load-results.json](docs/load-results.json) é substituído a cada execução e registra ambiente, throughput, p50/p95/p99, erros, conflitos e lag amostrado. Percentis nearest-rank incluem a resposta; aquecimento é separado. Auditoria final verifica saldo/ledger, efeito único e backlog zero antes da limpeza.
+O teste cria uma API isolada, um schema `load_test_*` em `dwp_test` e filas próprias, com publicação SQS real em paralelo. Exercita wallets diferentes, operações sobre a mesma wallet e 50 envios duplicados. Ao terminar, verifica a correspondência entre saldo e ledger, o efeito único das operações e a ausência de eventos pendentes antes de limpar o ambiente.
 
-Carga local usa uma API/oito conexões; não é benchmark produtivo. Prova multiprocesso está na integração. Throughput de replay não equivale a novos efeitos financeiros. Partidas dobradas ficam como evolução opcional: exigem definir contas de contrapartida e novas migrations além do ledger por wallet requerido.
+Cada execução atualiza [docs/load-results.json](docs/load-results.json) com o ambiente, a taxa de processamento, as latências p50/p95/p99, os erros, os conflitos e o atraso de publicação. Os percentis usam o método nearest-rank e incluem o tempo até a resposta; o aquecimento é medido separadamente.
+
+Esses resultados descrevem um experimento local com uma API e oito conexões, sem estimar capacidade de produção. Os cenários com múltiplos processos são verificados na integração. Replays também precisam ser analisados separadamente: responder a uma operação repetida não representa uma nova movimentação financeira.
+
+O ledger por wallet atende ao escopo do desafio. Partidas dobradas ficam como evolução opcional, pois exigem definir contas de contrapartida e novas migrations.
 
 ## Verificação automática e histórico maior
 
-`.github/workflows/ci.yml` executa instalação pelo lockfile, formatação, tipos, lint, unitários, build, integração real e E2E no Linux. A integração inclui três processos e SIGTERM nativo. O workflow ainda precisa de uma execução no GitHub; os checks locais não equivalem a um resultado publicado de CI.
+O workflow `.github/workflows/ci.yml` reúne instalação pelo lockfile, formatação, verificação de tipos, lint, testes unitários, build, integração real e E2E no Linux. A integração inclui três processos e encerramento por SIGTERM. Sua execução no GitHub ainda está pendente; os resultados locais estão registrados separadamente.
+
+Também é possível medir o comportamento com uma wallet que já possui histórico:
 
 ```powershell
 bun run test:load:history
@@ -157,6 +197,10 @@ bun run test:load:history
 
 Esse experimento prepara 500 apostas na wallet disputada e acrescenta 25 ms de atraso antes de cada envio SQS real. Salva `docs/load-history-results.json`, sem substituir o resultado da carga padrão. `LOAD_HISTORY_ENTRIES`, `LOAD_SQS_DELAY_MS` e `LOAD_DRAIN_TIMEOUT_MS` permitem ajustar o experimento. O histórico fica fora dos percentis, mas entra na auditoria final; backlog e atraso de publicação incluem a preparação. Veja [docs/performance.md](docs/performance.md).
 
-## Publicação sem ocupar conexão SQL
+## Como a Outbox se recupera de falhas
 
-A Outbox usa reserva persistida por 90 s e token de propriedade. O envio SQS ocorre depois de confirmar a reserva, fora da transação SQL. Outra instância retoma claims vencidos; tokens antigos não podem confirmar nem reagendar o evento. Antes de iniciar esta versão, pare publishers antigos e execute bun run db:migrate. Veja custos, política de rollout e garantias em [03 - Architecture.md](<03 - Architecture.md>).
+Antes de publicar, o worker reserva um evento no banco por 90 segundos e recebe um token que identifica essa reserva. O envio ao SQS acontece depois do commit da reserva, sem manter uma conexão SQL ocupada durante a chamada de rede.
+
+Se o processo parar, outra instância pode retomar o evento quando a reserva vencer. O token impede que um worker antigo confirme ou reagende um evento já assumido por outro. Ainda pode haver publicação duplicada se o envio ocorrer e a confirmação no banco falhar; por isso, o `eventId` permanece o mesmo.
+
+Ao atualizar uma instalação existente, pare os publishers antigos, execute `bun run db:migrate` e inicie as instâncias na nova versão. Os custos e as garantias dessa estratégia estão em [03 - Architecture.md](<03 - Architecture.md>).
